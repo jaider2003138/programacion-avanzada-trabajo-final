@@ -1,0 +1,1118 @@
+{
+  "dataset_original": "valentinafevu/productos-supermercado",
+  "processing_date": "2026-05-09T22:43:26.670029+00:00",
+  "output_dir": "datasets\\processed",
+  "image_size": 224,
+  "image_format": "jpg",
+  "split_ratio": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15
+  },
+  "split_method": "sklearn_estratificado",
+  "labels": {
+    "0": "arroz_y_granos",
+    "1": "pastas",
+    "2": "aceites",
+    "3": "salsas_y_condimentos",
+    "4": "cafe_chocolate",
+    "5": "enlatados",
+    "6": "azucar_sal"
+  },
+  "initial_inspection": {
+    "total_records": 7449,
+    "original_splits": {
+      "train": 7449
+    },
+    "columns": [
+      "image",
+      "name",
+      "supermarket_category",
+      "main_category",
+      "subcategory",
+      "full_image_path",
+      "ai_generated_description"
+    ],
+    "image_column": "image",
+    "name_column": "name",
+    "category_column": "subcategory",
+    "contains_images": true,
+    "contains_product_names": true,
+    "contains_categories": true,
+    "examples": [
+      {
+        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\0.webp)",
+        "name": "Arroz Diana blanco x10kg ",
+        "supermarket_category": "supermercado",
+        "main_category": "despensa",
+        "subcategory": "arroz-y-granos",
+        "full_image_path": "dataset/train/0.webp",
+        "ai_generated_description": "El producto es azúcar en forma de perlas, presentado en una bolsa con capacidad para 10 kg. La forma de las perlas de azúcar es esférica y uniforme, lo que facilita su uso en diversas aplicaciones culinarias y de repostería. La cantidad de 10 kg indica que es un paquete grande, adecuado para uso int..."
+      },
+      {
+        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\1.webp)",
+        "name": "Arroz Diana blanco x5kg ",
+        "supermarket_category": "supermercado",
+        "main_category": "despensa",
+        "subcategory": "arroz-y-granos",
+        "full_image_path": "dataset/train/1.webp",
+        "ai_generated_description": "El producto es un paquete que contiene arroz blanco. El paquete tiene una forma rectangular y contiene 5 kilogramos de arroz. El arroz está presentado en una imagen grande en el paquete, lo que sugiere que es el contenido principal. No hay información adicional sobre el tipo de arroz o su procesamie..."
+      },
+      {
+        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\2.webp)",
+        "name": "Arroz Sonora x10kg ",
+        "supermarket_category": "supermercado",
+        "main_category": "despensa",
+        "subcategory": "arroz-y-granos",
+        "full_image_path": "dataset/train/2.webp",
+        "ai_generated_description": "El producto es arroz, presentado en una bolsa. La cantidad de arroz en la bolsa es de un kilogramo. La forma del arroz es granular, típica de este tipo de producto. El tamaño de los granos es uniforme, lo que sugiere que es un arroz de buena calidad. La bolsa contiene una cantidad considerable de ar..."
+      },
+      {
+        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\3.webp)",
+        "name": "Arroz Diana blanco x3kg ",
+        "supermarket_category": "supermercado",
+        "main_category": "despensa",
+        "subcategory": "arroz-y-granos",
+        "full_image_path": "dataset/train/3.webp",
+        "ai_generated_description": "El producto es un paquete que contiene arroz blanco. El arroz está presentado en una sola porción dentro del paquete, lo que sugiere que se trata de una cantidad considerable. El tamaño del paquete indica que contiene 3000 gramos de arroz. La forma en que se presenta el arroz, en una gran masa blanc..."
+      },
+      {
+        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\4.webp)",
+        "name": "Arroz Diana Premium blanco x4000g ",
+        "supermarket_category": "supermercado",
+        "main_category": "despensa",
+        "subcategory": "arroz-y-granos",
+        "full_image_path": "dataset/train/4.webp",
+        "ai_generated_description": "El producto es arroz blanco contenido en una bolsa flexible. La cantidad de arroz en la bolsa es de 400 gramos. El arroz se presenta en granos blancos y alargados, característicos del arroz blanco comúnmente consumido. La bolsa permite almacenar y conservar el arroz en su interior."
+      }
+    ],
+    "possible_categories": [
+      "arroz-y-granos",
+      "aceite",
+      "cafe",
+      "bebida-achocolatada-en-polvo",
+      "cereales",
+      "harinas-y-mezclas-para-preparar",
+      "pastas",
+      "enlatados-y-conservas",
+      "azucar-endulzantes-y-panelas",
+      "chocolate-de-mesa",
+      "avenas-y-salvado",
+      "condimentos-caldos-y-sal",
+      "bases-cremas-y-sopas",
+      "salsas-y-vinagres",
+      "te-infusiones-e-instantaneos",
+      "leche",
+      "huevos",
+      "arepas",
+      "margarina",
+      "yogurt",
+      "kumis",
+      "avena",
+      "postres-refrigerados",
+      "carnes-frias-y-embutidos",
+      "frutas",
+      "pulpa-de-fruta",
+      "flores",
+      "mariscos",
+      "pescado-congelado",
+      "carne-res",
+      "carne-cerdo",
+      "panaderia-artesanal",
+      "panaderia-empacada",
+      "pasteleria",
+      "crema-leche-y-leche-condensada",
+      "gelatinas-flanes-y-pudines",
+      "reposteria",
+      "chocolateria",
+      "confiteria",
+      "dulces-tipicos",
+      "papas-fritas-y-paquetes",
+      "frutos-secos",
+      "galletas-dulces",
+      "galletas-saladas",
+      "galletas-dieteticas-y-saludables",
+      "mermelada-y-cremas-de-untar",
+      "carnes-frias-maduradas-y-ahumadas",
+      "quesos-especializados",
+      "encurtidos-y-otros",
+      "vino",
+      "whisky",
+      "cervezas",
+      "tequilas-y-piscos",
+      "aguardiente",
+      "ron",
+      "champañas-y-espumoso",
+      "aperitivos",
+      "agua",
+      "jugos-refrescos-y-maltas",
+      "gaseosas",
+      "te-liquido",
+      "hidratantes",
+      "energizantes",
+      "shampoo",
+      "acondicionadores-y-tratamientos",
+      "papel-higienico",
+      "desodorantes"
+    ],
+    "original_category_counts": {
+      "vino": 412,
+      "panaderia-empacada": 348,
+      "yogurt": 336,
+      "papas-fritas-y-paquetes": 304,
+      "condimentos-caldos-y-sal": 256,
+      "cafe": 240,
+      "carnes-frias-maduradas-y-ahumadas": 224,
+      "chocolateria": 204,
+      "frutas": 192,
+      "carnes-frias-y-embutidos": 190,
+      "te-infusiones-e-instantaneos": 188,
+      "pastas": 184,
+      "panaderia-artesanal": 184,
+      "confiteria": 184,
+      "galletas-dulces": 184,
+      "pescado-congelado": 180,
+      "arroz-y-granos": 168,
+      "frutos-secos": 160,
+      "gaseosas": 156,
+      "leche": 144,
+      "arepas": 144,
+      "quesos-especializados": 136,
+      "cervezas": 136,
+      "harinas-y-mezclas-para-preparar": 112,
+      "azucar-endulzantes-y-panelas": 112,
+      "whisky": 112,
+      "aceite": 108,
+      "cereales": 108,
+      "mermelada-y-cremas-de-untar": 88,
+      "carne-res": 84,
+      "ron": 84,
+      "aperitivos": 84,
+      "agua": 80,
+      "enlatados-y-conservas": 72,
+      "carne-cerdo": 68,
+      "flores": 64,
+      "pasteleria": 64,
+      "galletas-saladas": 64,
+      "encurtidos-y-otros": 64,
+      "champañas-y-espumoso": 64,
+      "te-liquido": 64,
+      "chocolate-de-mesa": 60,
+      "huevos": 60,
+      "aguardiente": 60,
+      "bebida-achocolatada-en-polvo": 48,
+      "margarina": 48,
+      "avena": 48,
+      "postres-refrigerados": 48,
+      "pulpa-de-fruta": 48,
+      "desodorantes": 45,
+      "avenas-y-salvado": 40,
+      "bases-cremas-y-sopas": 40,
+      "kumis": 40,
+      "mariscos": 40,
+      "crema-leche-y-leche-condensada": 40,
+      "gelatinas-flanes-y-pudines": 40,
+      "reposteria": 40,
+      "dulces-tipicos": 40,
+      "galletas-dieteticas-y-saludables": 40,
+      "tequilas-y-piscos": 40,
+      "hidratantes": 40,
+      "energizantes": 40,
+      "papel-higienico": 36,
+      "salsas-y-vinagres": 34,
+      "jugos-refrescos-y-maltas": 34,
+      "shampoo": 34,
+      "acondicionadores-y-tratamientos": 16
+    },
+    "records_without_name": 0
+  },
+  "total_images_processed": 2487,
+  "total_images_discarded": 19,
+  "total_images_otros": 4962,
+  "total_images_otros_saved": 4943,
+  "images_by_category": {
+    "arroz_y_granos": 528,
+    "pastas": 204,
+    "aceites": 127,
+    "salsas_y_condimentos": 322,
+    "cafe_chocolate": 693,
+    "enlatados": 217,
+    "azucar_sal": 396
+  },
+  "category_summary": [
+    {
+      "category": "arroz_y_granos",
+      "images": 528
+    },
+    {
+      "category": "pastas",
+      "images": 204
+    },
+    {
+      "category": "aceites",
+      "images": 127
+    },
+    {
+      "category": "salsas_y_condimentos",
+      "images": 322
+    },
+    {
+      "category": "cafe_chocolate",
+      "images": 693
+    },
+    {
+      "category": "enlatados",
+      "images": 217
+    },
+    {
+      "category": "azucar_sal",
+      "images": 396
+    }
+  ],
+  "images_by_split": {
+    "train": 1740,
+    "validation": 373,
+    "test": 374
+  },
+  "split_summary": [
+    {
+      "split": "train",
+      "images": 1740
+    },
+    {
+      "split": "validation",
+      "images": 373
+    },
+    {
+      "split": "test",
+      "images": 374
+    }
+  ],
+  "split_category_counts": {
+    "train": {
+      "arroz_y_granos": 369,
+      "pastas": 143,
+      "aceites": 89,
+      "salsas_y_condimentos": 225,
+      "cafe_chocolate": 485,
+      "enlatados": 152,
+      "azucar_sal": 277
+    },
+    "validation": {
+      "arroz_y_granos": 79,
+      "pastas": 31,
+      "aceites": 19,
+      "salsas_y_condimentos": 48,
+      "cafe_chocolate": 104,
+      "enlatados": 33,
+      "azucar_sal": 59
+    },
+    "test": {
+      "arroz_y_granos": 80,
+      "pastas": 30,
+      "aceites": 19,
+      "salsas_y_condimentos": 49,
+      "cafe_chocolate": 104,
+      "enlatados": 32,
+      "azucar_sal": 60
+    }
+  },
+  "discarded_by_reason": {
+    "otros_imagen_danada_o_error_guardado": 19
+  },
+  "empty_categories": [],
+  "classification_criteria": {
+    "arroz_y_granos": [
+      "arroz",
+      "frijol",
+      "frijoles",
+      "lenteja",
+      "lentejas",
+      "garbanzo",
+      "garbanzos",
+      "grano",
+      "granos",
+      "maiz",
+      "maíz",
+      "quinua",
+      "quinoa",
+      "cereal",
+      "avena"
+    ],
+    "pastas": [
+      "pasta",
+      "pastas",
+      "spaghetti",
+      "espagueti",
+      "espaguetis",
+      "macarron",
+      "macarrones",
+      "fideo",
+      "fideos",
+      "lasagna",
+      "lasaña"
+    ],
+    "aceites": [
+      "aceite",
+      "aceites",
+      "oliva",
+      "girasol",
+      "canola",
+      "vegetal"
+    ],
+    "salsas_y_condimentos": [
+      "salsa",
+      "salsas",
+      "mayonesa",
+      "mostaza",
+      "tomate",
+      "ketchup",
+      "condimento",
+      "condimentos",
+      "caldo",
+      "consome",
+      "consomé",
+      "vinagre",
+      "adobo",
+      "sazonador",
+      "sal de ajo"
+    ],
+    "cafe_chocolate": [
+      "cafe",
+      "café",
+      "chocolate",
+      "cocoa",
+      "chocolisto",
+      "milo",
+      "instantaneo",
+      "instantáneo",
+      "bebida achocolatada"
+    ],
+    "enlatados": [
+      "atun",
+      "atún",
+      "sardina",
+      "sardinas",
+      "enlatado",
+      "enlatados",
+      "lata",
+      "maiz tierno",
+      "maíz tierno",
+      "arveja",
+      "arvejas",
+      "conserva",
+      "conservas"
+    ],
+    "azucar_sal": [
+      "azucar",
+      "azúcar",
+      "sal",
+      "panela",
+      "endulzante",
+      "stevia",
+      "edulcorante"
+    ]
+  },
+  "unclassified_examples": [
+    {
+      "source_split": "train",
+      "index": 673,
+      "name": "Pancake Aunt Jemima Solo Leche Doypack x 600g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 674,
+      "name": "Harina de trigo Haz De Oros tradicional x2500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 677,
+      "name": "Harina de trigo Haz De Oros tradicional x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 678,
+      "name": "Harina de trigo La Nieve x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 679,
+      "name": "Pancake Aunt Jemima Original Doypack x 600g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 680,
+      "name": "Harina PAN integral semillas nutritivas x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 683,
+      "name": "Harina Why Not almendras libre gluten x250g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 685,
+      "name": "Premezcla Alcaguete waffles pandeyuca sin gluten x400g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 687,
+      "name": "Mezcla Haz De Oros pandebono x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 689,
+      "name": "Pancake Aunt Jemima Solo Leche Doypack x 600g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 690,
+      "name": "Harina de trigo Haz De Oros tradicional x2500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 693,
+      "name": "Harina de trigo Haz De Oros tradicional x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 694,
+      "name": "Harina de trigo La Nieve x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 695,
+      "name": "Pancake Aunt Jemima Original Doypack x 600g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 696,
+      "name": "Mezcla Pan para arepas de choclo x850g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 697,
+      "name": "Harina de trigo Haz De Oros tradicional x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 699,
+      "name": "Mezcla lista para pancakes crepes y waffles Haz de oros x 600 g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 700,
+      "name": "Harina de trigo Haz De Oros con polvo para hornear x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 703,
+      "name": "Harina Promasa precocida blanca x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 704,
+      "name": "Harina PAN integral semillas nutritivas x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 707,
+      "name": "Harina Why Not almendras libre gluten x250g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 709,
+      "name": "Premezcla Alcaguete waffles pandeyuca sin gluten x400g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 711,
+      "name": "Mezcla Haz De Oros pandebono x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 714,
+      "name": "Pancake Aunt Jemima Original Doypack x 300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 715,
+      "name": "Harina de trigo Harina Haz De Oros x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 716,
+      "name": "Harina Promasa precocida amarilla x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 720,
+      "name": "Harina precocida blanca x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 721,
+      "name": "Mezcla Haz de Oros Almojábanas x250grs",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 725,
+      "name": "Carve Noel x330g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 729,
+      "name": "Mezcla Lista Para Pancakes Crepes y Waffles Light Haz de oros x 300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 730,
+      "name": "Harina Robinson leudante x1kg",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 731,
+      "name": "Mezcla Multigranola Toning Helado Vainilla 1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 732,
+      "name": "Mezcla Haz De Oros pizza x457g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 733,
+      "name": "Maca Nature's Heart orgánica polvo x100g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 735,
+      "name": "Tapioca Bio Plaza sin gluten x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 737,
+      "name": "Premezcla Alcaguete waffle pandeyuca x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 738,
+      "name": "Harina Monterra coco natural desgrasada sin gluten x340g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 739,
+      "name": "Harina Viva Natur yuca x480g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 740,
+      "name": "Sémola La Molisana molida x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 741,
+      "name": "Harina Promasa amarilla x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 742,
+      "name": "Mezcla Why Not pancakes waffles base de almendras sabor churro x285g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 746,
+      "name": "Harina Robinson leudante x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 748,
+      "name": "Mezcla Why Not pancakes waffles almendra vainilla x285g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 749,
+      "name": "Harina Quinoaclub arepa blanca x400g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 750,
+      "name": "Harina Bioessens coco orgánica x1lb",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 753,
+      "name": "Harina Nutrisano almendra x150g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 755,
+      "name": "Mezcla Wakeup Proteína Vainilla Polvo x450G",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 756,
+      "name": "Sémola La Molisana integral molida x1000g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 758,
+      "name": "Harina A De Coco orgánica x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 759,
+      "name": "Polenta Tipiak precocida x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 760,
+      "name": "Colágeno Nutrisano hidrolizado x150g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 761,
+      "name": "Mezcla para buñuelos Maizena x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 763,
+      "name": "Harina Bio Plaza plátano x500g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 764,
+      "name": "Mezcla Lista para Pancakes y Waffles Arandanos",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 765,
+      "name": "Mezcla La Especial Nueces Tajin 40g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 766,
+      "name": "Natilla de La Abuela Coco x300grs",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 768,
+      "name": "Mezcla Bio Plaza waffles sagú cacao x350g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 769,
+      "name": "Harina Natulive alpiste molido x250g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 771,
+      "name": "Natilla Cocada Copelia Maizena 300grs",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 772,
+      "name": "Mezcla para natilla Maizena arequipe x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 774,
+      "name": "Mezcla para natilla Maizena original x600g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 775,
+      "name": "Natilla Maracuya de La Abuela x300grs",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 776,
+      "name": "Premezcla Vegan Life pizza vegana x 400g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 777,
+      "name": "Mezcla para natilla Maizena tres leches x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 778,
+      "name": "Mezcal Burrito Fiestero Artesanal Cenizo x750ml",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 779,
+      "name": "Harina Robinson tradicional x1kg",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 780,
+      "name": "Mezcla De La Abuela buñuelos x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 781,
+      "name": "Mezcla De La Abuela natilla tradicional x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 782,
+      "name": "Mezcla Haz de Oros Natilla Tradicional x300grs",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 783,
+      "name": "Mezcla para natilla Maizena coco x300g",
+      "source_category": "harinas-y-mezclas-para-preparar",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1512,
+      "name": "Crema Maggi Pollo Con Champiñones x60G",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1514,
+      "name": "Crema Maggi Marinera x56G",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1516,
+      "name": "Crema La Sopera mazorca x45g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1518,
+      "name": "Crema La Sopera ajiaco x83g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1519,
+      "name": "Crema La Sopera surtida x5und x445g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1521,
+      "name": "Crema La Sopera champiñones x90g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1522,
+      "name": "Crema La Sopera pollo y champiñones x90g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1528,
+      "name": "Crema Maggi Pollo Con Champiñones x60G",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1530,
+      "name": "Crema Maggi Marinera x56G",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1536,
+      "name": "Crema Maggi Champiñones x58g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1537,
+      "name": "Crema La Sopera surtida x3und x90g c-u",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1538,
+      "name": "Sopa Maggi Ajiaco x60G",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1539,
+      "name": "Crema La Sopera pollo x45g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1540,
+      "name": "Crema La Sopera mazorca x45g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1542,
+      "name": "Crema La Sopera ajiaco x83g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1543,
+      "name": "Crema La Sopera surtida x5und x445g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1545,
+      "name": "Crema La Sopera champiñones x90g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1546,
+      "name": "Crema La Sopera pollo y champiñones x90g",
+      "source_category": "bases-cremas-y-sopas",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1582,
+      "name": "Aromatica Tosh manzanilla jengibre limón miel x20und x1,1g c/u",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1583,
+      "name": "Aromática Hindú manzanilla x20und x18g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1585,
+      "name": "Aromática Hindú hierbabuena x20und x18g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1587,
+      "name": "Aromática Oriental Manzanilla pague 1 lleve 2 x30g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1588,
+      "name": "Aromática de frutas Hindú surtida x12und x156g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1590,
+      "name": "Té negro Hindú Original x25und x40g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1592,
+      "name": "Infusión Hindú frutos rojos x20und x20g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1593,
+      "name": "Aromática Oriental Hierbabuena Frutos Rojos x20g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1595,
+      "name": "Aromática Hindú surtida x18g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1596,
+      "name": "Aromática Hindú manzanilla x50und x45g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1597,
+      "name": "Te Nature's Heart verde x20 und x17g c-u",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    },
+    {
+      "source_split": "train",
+      "index": 1598,
+      "name": "Infusión Hindú Descanso x20und x20g",
+      "source_category": "te-infusiones-e-instantaneos",
+      "reason": "sin_coincidencia_confiable"
+    }
+  ]
+}

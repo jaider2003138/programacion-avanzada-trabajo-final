@@ -1,0 +1,12 @@
+datasets
+pillow
+scikit-learn
+pandas
+tqdm
+tensorflow
+matplotlib
+numpy
+flask
+flask-cors
+streamlit
+requests
