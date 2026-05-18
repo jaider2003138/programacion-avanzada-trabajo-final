@@ -10,6 +10,7 @@ Ejecutar desde la raíz del proyecto:
 from __future__ import annotations
 
 import io
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -337,8 +338,15 @@ def get_product_by_code(code: str):
 if __name__ == "__main__":
     initialize_database()
 
+    debug_enabled = os.getenv("FLASK_DEBUG", "1").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
     app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True,
+        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        port=int(os.getenv("FLASK_PORT", "5000")),
+        debug=debug_enabled,
     )

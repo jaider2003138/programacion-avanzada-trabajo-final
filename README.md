@@ -329,7 +329,37 @@ usando `ON CONFLICT DO NOTHING`.
 
 ## Ejecutar el sistema
 
-El sistema requiere dos terminales abiertas de forma simultánea.
+Puedes ejecutarlo con Docker Compose en una sola terminal o manualmente con dos
+terminales abiertas de forma simultánea.
+
+### Opcion recomendada - Docker Compose
+
+Con Docker solo necesitas una terminal. Asegurate de tener el archivo `.env` en la
+raiz del proyecto con `DATABASE_URL` configurada y de que existan:
+
+```text
+trained_models/product_classifier.onnx
+datasets/processed/labels.json
+```
+
+Levanta API Flask y Streamlit juntos:
+
+```powershell
+docker compose up --build
+```
+
+Servicios disponibles:
+
+- API Flask: `http://localhost:5000`
+- Streamlit: `http://localhost:8501`
+
+Para detener todo:
+
+```powershell
+docker compose down
+```
+
+### Opcion manual - dos terminales
 
 ### Terminal 1 — API Flask
 

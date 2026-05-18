@@ -13,6 +13,7 @@ Terminal 2:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ import requests
 import streamlit as st
 
 
-API_BASE_URL = "http://127.0.0.1:5000"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000")
 
 
 CATEGORY_LABELS = {

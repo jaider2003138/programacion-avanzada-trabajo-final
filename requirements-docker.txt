@@ -1,0 +1,10 @@
+pillow
+pandas
+onnxruntime
+numpy
+flask
+flask-cors
+streamlit
+requests
+psycopg2-binary
+python-dotenv

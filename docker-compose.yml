@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: .
+    image: inventario-inteligente:latest
+    container_name: inventario_api
+    env_file:
+      - .env
+    environment:
+      FLASK_HOST: 0.0.0.0
+      FLASK_PORT: "5000"
+      FLASK_DEBUG: "0"
+    command: python -m app.api.app
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  streamlit:
+    image: inventario-inteligente:latest
+    container_name: inventario_streamlit
+    environment:
+      API_BASE_URL: http://api:5000
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+    command: streamlit run streamlit_app/main.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
