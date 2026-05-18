@@ -1,7 +1,7 @@
 # Reporte de preparacion del dataset
 
 - Dataset usado: `valentinafevu/productos-supermercado`
-- Fecha de procesamiento: `2026-05-09T22:43:26.670029+00:00`
+- Fecha de procesamiento: `2026-05-14T22:45:23.238576+00:00`
 - Metodo de division: `sklearn_estratificado`
 
 ## Inspeccion inicial
@@ -82,7 +82,7 @@ Ejemplos:
 ### Ejemplo 1
 ```json
 {
-  "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\0.webp)",
+  "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\0.webp)",
   "name": "Arroz Diana blanco x10kg ",
   "supermarket_category": "supermercado",
   "main_category": "despensa",
@@ -94,7 +94,7 @@ Ejemplos:
 ### Ejemplo 2
 ```json
 {
-  "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\1.webp)",
+  "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\1.webp)",
   "name": "Arroz Diana blanco x5kg ",
   "supermarket_category": "supermercado",
   "main_category": "despensa",
@@ -106,7 +106,7 @@ Ejemplos:
 ### Ejemplo 3
 ```json
 {
-  "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\2.webp)",
+  "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\2.webp)",
   "name": "Arroz Sonora x10kg ",
   "supermarket_category": "supermercado",
   "main_category": "despensa",
@@ -118,7 +118,7 @@ Ejemplos:
 ### Ejemplo 4
 ```json
 {
-  "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\3.webp)",
+  "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\3.webp)",
   "name": "Arroz Diana blanco x3kg ",
   "supermarket_category": "supermercado",
   "main_category": "despensa",
@@ -130,7 +130,7 @@ Ejemplos:
 ### Ejemplo 5
 ```json
 {
-  "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\4.webp)",
+  "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\4.webp)",
   "name": "Arroz Diana Premium blanco x4000g ",
   "supermarket_category": "supermercado",
   "main_category": "despensa",

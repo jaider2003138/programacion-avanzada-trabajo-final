@@ -1,5 +1,5 @@
 """
-Servicio de inventario usando SQLite.
+Servicio de inventario usando PostgreSQL (Supabase).
 
 Este módulo permite:
 - Crear la base de datos.
@@ -11,23 +11,50 @@ Este módulo permite:
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
+import os
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any
 
+import psycopg2
+import psycopg2.extras
+from dotenv import load_dotenv
 
-DATABASE_PATH = Path("app/database/inventory.db")
+load_dotenv()
+
+_DATABASE_URL: str | None = None
 
 
-def get_connection() -> sqlite3.Connection:
+def _get_database_url() -> str:
+    global _DATABASE_URL
+    if _DATABASE_URL is None:
+        url = os.getenv("DATABASE_URL")
+        if not url:
+            raise RuntimeError(
+                "DATABASE_URL no está configurada. "
+                "Crea un archivo .env con DATABASE_URL=postgresql://..."
+            )
+        _DATABASE_URL = url
+    return _DATABASE_URL
+
+
+@contextmanager
+def get_connection():
     """
-    Crea y devuelve una conexión a SQLite.
+    Context manager que abre y cierra una conexión a PostgreSQL.
     """
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DATABASE_PATH)
-    connection.row_factory = sqlite3.Row
-    return connection
+    connection = psycopg2.connect(
+        _get_database_url(),
+        cursor_factory=psycopg2.extras.RealDictCursor,
+    )
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def initialize_database() -> None:
@@ -40,20 +67,18 @@ def initialize_database() -> None:
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code TEXT UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                category TEXT NOT NULL,
-                quantity INTEGER NOT NULL DEFAULT 1,
-                image_path TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                created_at TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'activo'
+                id               SERIAL PRIMARY KEY,
+                code             TEXT UNIQUE NOT NULL,
+                name             TEXT NOT NULL,
+                category         TEXT NOT NULL,
+                quantity         INTEGER NOT NULL DEFAULT 1,
+                image_path       TEXT NOT NULL,
+                confidence       DOUBLE PRECISION NOT NULL,
+                created_at       TEXT NOT NULL,
+                status           TEXT NOT NULL DEFAULT 'activo'
             )
             """
         )
-
-        connection.commit()
 
 
 def get_next_sequence() -> int:
@@ -101,7 +126,8 @@ def register_product(
                 created_at,
                 status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
             """,
             (
                 code,
@@ -115,9 +141,7 @@ def register_product(
             ),
         )
 
-        connection.commit()
-
-        product_id = cursor.lastrowid
+        product_id = cursor.fetchone()["id"]
 
     return {
         "id": product_id,
@@ -185,7 +209,7 @@ def find_product_by_code(code: str) -> dict[str, Any] | None:
                 created_at,
                 status
             FROM products
-            WHERE code = ?
+            WHERE code = %s
             """,
             (code,),
         )

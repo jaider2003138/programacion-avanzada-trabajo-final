@@ -9,18 +9,18 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import tensorflow as tf
+import onnxruntime as ort
 from PIL import Image, ImageOps
 
 
-MODEL_PATH = Path("trained_models/product_classifier.keras")
+MODEL_PATH = Path("trained_models/product_classifier.onnx")
 LABELS_PATH = Path("datasets/processed/labels.json")
 
 IMAGE_SIZE = (224, 224)
 TOP_K = 3
 
 
-_model: tf.keras.Model | None = None
+_session: ort.InferenceSession | None = None
 _class_names: list[str] | None = None
 
 
@@ -37,19 +37,19 @@ def load_labels(labels_path: Path = LABELS_PATH) -> list[str]:
     return [labels_dict[str(index)] for index in range(len(labels_dict))]
 
 
-def get_model() -> tf.keras.Model:
+def get_model() -> ort.InferenceSession:
     """
-    Carga el modelo una sola vez y lo reutiliza.
+    Carga la sesión ONNX una sola vez y la reutiliza.
     """
-    global _model
+    global _session
 
-    if _model is None:
+    if _session is None:
         if not MODEL_PATH.exists():
             raise FileNotFoundError(f"No se encontró el modelo: {MODEL_PATH}")
 
-        _model = tf.keras.models.load_model(MODEL_PATH)
+        _session = ort.InferenceSession(str(MODEL_PATH))
 
-    return _model
+    return _session
 
 
 def get_class_names() -> list[str]:
@@ -82,12 +82,13 @@ def predict_pil_image(image: Image.Image) -> dict[str, Any]:
     """
     Realiza predicción sobre una imagen PIL.
     """
-    model = get_model()
+    session = get_model()
     class_names = get_class_names()
 
     image_array = preprocess_image(image)
 
-    predictions = model.predict(image_array, verbose=0)[0]
+    input_name = session.get_inputs()[0].name
+    predictions = session.run(None, {input_name: image_array})[0][0]
     top_indices = predictions.argsort()[-TOP_K:][::-1]
 
     top_predictions = []

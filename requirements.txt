@@ -3,10 +3,13 @@ pillow
 scikit-learn
 pandas
 tqdm
-tensorflow
+onnxruntime
+tf2onnx
 matplotlib
 numpy
 flask
 flask-cors
 streamlit
 requests
+psycopg2-binary
+python-dotenv

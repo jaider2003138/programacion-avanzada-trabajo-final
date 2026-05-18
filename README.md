@@ -1,46 +1,86 @@
 # Sistema Inteligente de Clasificación e Inventariado de Productos de Despensa
 
-## Descripción
-
-Este proyecto es un sistema inteligente de inventario capaz de clasificar productos de despensa mediante imágenes, generar automáticamente un código único para cada producto y registrarlo en una base de datos SQLite.
-
-El sistema utiliza un modelo de inteligencia artificial entrenado con TensorFlow/Keras y MobileNetV2. Además, cuenta con una API desarrollada en Flask y una interfaz visual desarrollada en Streamlit.
-
-El usuario puede subir una imagen o tomar una foto con la cámara, obtener la categoría predicha del producto, confirmar los datos y guardar el producto en el inventario.
+Sistema que clasifica automáticamente productos de despensa a partir de imágenes,
+genera códigos únicos de inventario y registra los productos en una base de datos
+PostgreSQL alojada en Supabase.
 
 ---
 
-## Tecnologías utilizadas
+## Descripción del proyecto
 
-- Python 3.11
-- TensorFlow / Keras
-- MobileNetV2
-- Flask
-- Flask-CORS
-- Streamlit
-- SQLite
-- Pillow
-- NumPy
-- Pandas
-- Scikit-learn
-- Matplotlib
-- Requests
-- Hugging Face Datasets
+El sistema recibe una imagen de un producto (aceite, arroz, pasta, etc.), la analiza
+con un modelo de inteligencia artificial y determina a cuál de las siete categorías de
+despensa pertenece. Con esa información genera un código de inventario estructurado
+(`INV-CAF-202605-0001`) y permite registrar el producto en la base de datos.
+
+**Caso de uso principal:** digitalizar y organizar el inventario de una despensa o
+bodega clasificando productos mediante fotos, sin necesidad de leer etiquetas ni
+códigos de barras manualmente.
+
+El usuario puede:
+- Clasificar una imagen individual y guardar el producto.
+- Hacer cargue masivo de imágenes (múltiples archivos o un ZIP) y guardar todo el
+  lote de una sola vez.
+- Consultar y exportar el inventario registrado.
 
 ---
 
-## Categorías del modelo
+## Arquitectura y tecnologías
 
-El modelo clasifica productos de despensa en las siguientes categorías:
+### Stack completo
 
-```text
-arroz_y_granos
-pastas
-aceites
-salsas_y_condimentos
-cafe_chocolate
-enlatados
-azucar_sal
+| Capa | Tecnología |
+|------|-----------|
+| Interfaz de usuario | Streamlit |
+| API REST | Flask + Flask-CORS |
+| Inferencia del modelo | ONNX Runtime |
+| Base de datos | PostgreSQL (Supabase) |
+| Procesamiento de imágenes | Pillow + NumPy |
+| Entrenamiento del modelo | TensorFlow / Keras + MobileNetV2 |
+| Exportación a ONNX | tf2onnx |
+| Preparación del dataset | Hugging Face Datasets |
+
+### Por qué se migró de TensorFlow a ONNX Runtime
+
+El modelo se **entrena** con TensorFlow/Keras, pero se **sirve** con ONNX Runtime.
+Esta separación trae varias ventajas:
+
+- **Arranque más rápido:** `onnxruntime` importa en milisegundos; TensorFlow puede
+  tardar varios segundos en inicializar.
+- **Menor huella de memoria:** el runtime de inferencia es mucho más liviano que la
+  librería completa de TensorFlow.
+- **Sin GPU requerida en producción:** ONNX Runtime funciona bien en CPU, que es el
+  entorno de despliegue habitual de la API.
+- **Portabilidad:** el archivo `.onnx` es estándar y puede correrse en otros runtimes
+  o lenguajes sin depender de TensorFlow.
+
+TensorFlow sigue siendo una dependencia del proyecto para entrenamiento y conversión,
+pero **no se necesita en producción** (solo `onnxruntime`).
+
+### Diagrama de componentes
+
+```
+                        ┌─────────────────────────────┐
+                        │        Usuario              │
+                        └──────────┬──────────────────┘
+                                   │ navegador
+                        ┌──────────▼──────────────────┐
+                        │   Streamlit  :8501          │
+                        │   streamlit_app/main.py     │
+                        └──────────┬──────────────────┘
+                                   │ HTTP (requests)
+                        ┌──────────▼──────────────────┐
+                        │   Flask API  :5000          │
+                        │   app/api/app.py            │
+                        └────────┬────────────────────┘
+                                 │
+               ┌─────────────────┴──────────────────┐
+               │                                    │
+   ┌───────────▼────────────┐        ┌──────────────▼──────────────┐
+   │    ONNX Runtime        │        │   PostgreSQL (Supabase)      │
+   │  product_classifier    │        │   tabla: products           │
+   │       .onnx            │        │   psycopg2 + python-dotenv  │
+   └────────────────────────┘        └─────────────────────────────┘
 ```
 
 ---
@@ -48,272 +88,150 @@ azucar_sal
 ## Estructura del proyecto
 
 ```text
-programacion avanzada- proyecto final/
+programacion-avanzada-trabajo-final/
 │
 ├── app/
 │   ├── __init__.py
-│   │
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── app.py
-│   │   └── prediction_utils.py
-│   │
+│   │   ├── app.py                  ← API Flask (endpoints)
+│   │   └── prediction_utils.py     ← Inferencia con ONNX Runtime
 │   ├── database/
-│   │   └── inventory.db
-│   │
+│   │   └── inventory.db            ← Base de datos SQLite local (legado)
 │   └── services/
 │       ├── __init__.py
-│       ├── code_generator.py
-│       └── inventory_service.py
+│       ├── code_generator.py       ← Genera códigos INV-XXX-YYYYMM-0000
+│       └── inventory_service.py    ← CRUD contra PostgreSQL (psycopg2)
 │
 ├── datasets/
 │   └── processed/
-│       ├── labels.json
-│       ├── dataset_report.json
-│       └── dataset_report.md
+│       ├── labels.json             ← Mapa índice → categoría
+│       ├── dataset_report.json     ← Reporte de preparación (JSON)
+│       └── dataset_report.md       ← Reporte de preparación (Markdown)
 │
 ├── scripts/
-│   ├── prepare_hf_dataset.py
-│   ├── train_model.py
-│   ├── predict_image.py
-│   ├── predict_and_register.py
-│   └── list_inventory.py
+│   ├── prepare_hf_dataset.py       ← Descarga y prepara el dataset desde HF
+│   ├── train_model.py              ← Entrena MobileNetV2 con Transfer Learning
+│   ├── export_to_onnx.py           ← Convierte .keras → .onnx
+│   ├── migrate_to_postgres.py      ← Migra datos de SQLite a PostgreSQL
+│   ├── predict_image.py            ← Predice una imagen desde consola
+│   ├── predict_and_register.py     ← Predice y registra en BD desde consola
+│   └── list_inventory.py           ← Lista el inventario desde consola
 │
 ├── streamlit_app/
-│   └── main.py
+│   └── main.py                     ← Interfaz Streamlit (4 tabs)
 │
 ├── trained_models/
-│   ├── training_report.json
-│   ├── accuracy_loss.png
-│   └── confusion_matrix.png
+│   ├── product_classifier.onnx     ← Modelo listo para inferencia (generado)
+│   ├── product_classifier.keras    ← Modelo Keras (generado, no se sube)
+│   ├── training_report.json        ← Métricas de entrenamiento
+│   ├── accuracy_loss.png           ← Gráfica de entrenamiento
+│   └── confusion_matrix.png        ← Matriz de confusión
 │
-├── requirements.txt
+├── .env                            ← Variables de entorno (NO se sube a Git)
 ├── .gitignore
+├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Archivos que no se suben al repositorio
+## Variables de entorno
 
-Por tamaño y buenas prácticas, algunos archivos no se suben a GitHub:
+El archivo `.env` debe crearse en la raíz del proyecto con este contenido:
 
-```text
-.venv/
-datasets/processed/train/
-datasets/processed/validation/
-datasets/processed/test/
-datasets/processed/otros/
-trained_models/product_classifier.keras
+```env
+DATABASE_URL=postgresql://usuario:contraseña@host:5432/postgres?sslmode=require
 ```
 
-Cada integrante debe generar esos archivos en su propio computador ejecutando los comandos indicados en este documento.
+> El archivo `.env` está en `.gitignore` y **nunca debe subirse al repositorio**.
+> Cada integrante debe crearlo manualmente con la URL real de la base de datos.
 
 ---
 
 ## Requisitos previos
 
-Antes de ejecutar el proyecto, cada integrante debe tener instalado:
-
 - Python 3.11
 - Git
-- Visual Studio Code
+- Acceso a un proyecto de Supabase (para la base de datos PostgreSQL)
+- Visual Studio Code (recomendado) o cualquier editor
 
 ---
 
-## 1. Instalar Python 3.11
+## Instalación
 
-Este proyecto debe ejecutarse con **Python 3.11**.
-
-No se recomienda usar Python 3.14 porque TensorFlow no tiene soporte compatible para esa versión.
-
-Para verificar las versiones instaladas, ejecutar en PowerShell:
-
-```powershell
-py -0
-```
-
-Debe aparecer algo parecido a:
-
-```text
--3.11-64
-```
-
-Si no aparece Python 3.11, se puede instalar desde terminal usando `winget`:
-
-```powershell
-winget install Python.Python.3.11
-```
-
-Durante la instalación, aceptar los términos si la terminal lo solicita.
-
-Después de instalar, cerrar y abrir nuevamente Visual Studio Code.
-
-Verificar otra vez:
-
-```powershell
-py -0
-```
-
----
-
-## 2. Clonar el repositorio
-
-Cada integrante debe clonar el proyecto desde GitHub:
+### 1. Clonar el repositorio
 
 ```powershell
 git clone URL_DEL_REPOSITORIO
+cd programacion-avanzada-trabajo-final
 ```
 
-Entrar a la carpeta del proyecto:
-
-```powershell
-cd NOMBRE_DEL_PROYECTO
-```
-
-Ejemplo:
-
-```powershell
-cd "programacion avanzada- proyecto final"
-```
-
-> Nota: reemplazar `URL_DEL_REPOSITORIO` por la URL real del repositorio y `NOMBRE_DEL_PROYECTO` por el nombre real de la carpeta.
-
----
-
-## 3. Crear entorno virtual
-
-Desde la raíz del proyecto, crear el entorno virtual con Python 3.11:
+### 2. Crear y activar el entorno virtual
 
 ```powershell
 py -3.11 -m venv .venv
-```
-
-Esto crea una carpeta llamada:
-
-```text
-.venv/
-```
-
-Esa carpeta no se sube a GitHub.
-
----
-
-## 4. Activar entorno virtual
-
-En PowerShell:
-
-```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Si se activó correctamente, la terminal debe mostrar algo así:
-
-```text
-(.venv) PS C:\ruta\del\proyecto>
-```
-
----
-
-## 5. Si PowerShell no permite activar el entorno
-
-Si aparece un error de permisos o ejecución de scripts, ejecutar:
+Si PowerShell rechaza el script de activación:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-Cuando pregunte, responder:
-
-```text
-Y
-```
-
-Luego volver a activar el entorno:
-
-```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
----
+Con el entorno activo la terminal debe mostrar `(.venv)` al inicio del prompt.
 
-## 6. Verificar versión de Python dentro del entorno
-
-Con el entorno activo:
-
-```powershell
-python --version
-```
-
-Debe salir algo como:
-
-```text
-Python 3.11.x
-```
-
-Si sale Python 3.14, el entorno fue creado con la versión incorrecta. En ese caso, borrar `.venv/` y crearlo otra vez usando:
-
-```powershell
-py -3.11 -m venv .venv
-```
-
----
-
-## 7. Instalar dependencias
-
-Con el entorno virtual activo:
+### 3. Instalar dependencias
 
 ```powershell
 python -m pip install --upgrade pip
-```
-
-Luego instalar todas las librerías del proyecto:
-
-```powershell
 python -m pip install -r requirements.txt
 ```
 
-Si por alguna razón falta alguna dependencia, se pueden instalar manualmente:
+### 4. Configurar la base de datos
+
+Crear el archivo `.env` en la raíz del proyecto con la `DATABASE_URL` de Supabase:
 
 ```powershell
-python -m pip install tensorflow matplotlib numpy scikit-learn datasets pillow pandas tqdm flask flask-cors streamlit requests
+# Ejemplo (reemplazar con los valores reales):
+# DATABASE_URL=postgresql://postgres:TuContraseña@db.xxxx.supabase.co:5432/postgres?sslmode=require
+```
+
+Luego crear la tabla en el **SQL Editor de Supabase**:
+
+```sql
+CREATE TABLE IF NOT EXISTS products (
+    id               SERIAL PRIMARY KEY,
+    code             TEXT UNIQUE NOT NULL,
+    name             TEXT NOT NULL,
+    category         TEXT NOT NULL,
+    quantity         INTEGER NOT NULL DEFAULT 1,
+    image_path       TEXT NOT NULL,
+    confidence       DOUBLE PRECISION NOT NULL,
+    created_at       TEXT NOT NULL,
+    status           TEXT NOT NULL DEFAULT 'activo'
+);
 ```
 
 ---
 
-## 8. Verificar instalación de TensorFlow
+## Preparar el dataset
 
-Ejecutar:
-
-```powershell
-python -c "import tensorflow as tf; print(tf.__version__)"
-```
-
-Si muestra una versión de TensorFlow, la instalación está correcta.
-
-Si aparece error indicando que TensorFlow no existe o no se encuentra una versión compatible, revisar que el entorno esté usando Python 3.11.
-
----
-
-## 9. Preparar el dataset
-
-El dataset completo no se sube al repositorio porque contiene muchas imágenes.
-
-Cada integrante debe generarlo ejecutando el siguiente comando:
+El dataset de imágenes **no se sube al repositorio**. Cada integrante debe
+generarlo ejecutando:
 
 ```powershell
-python scripts/prepare_hf_dataset.py --image-column image --name-column name --category-column subcategory --no-streaming --clean-output
+python scripts/prepare_hf_dataset.py --clean-output
 ```
 
-Este comando descarga el dataset desde Hugging Face y lo organiza en la estructura necesaria para entrenamiento.
+Este comando descarga el dataset
+[`valentinafevu/productos-supermercado`](https://huggingface.co/datasets/valentinafevu/productos-supermercado)
+desde Hugging Face en modo streaming y organiza las imágenes en la estructura
+necesaria para el entrenamiento.
 
-Dataset utilizado:
-
-```text
-valentinafevu/productos-supermercado
-```
-
-Al finalizar, se deben crear estas carpetas:
+Al finalizar se crean las carpetas:
 
 ```text
 datasets/processed/train/
@@ -322,7 +240,7 @@ datasets/processed/test/
 datasets/processed/otros/
 ```
 
-Y estos archivos:
+Y los archivos de reporte:
 
 ```text
 datasets/processed/labels.json
@@ -330,62 +248,35 @@ datasets/processed/dataset_report.json
 datasets/processed/dataset_report.md
 ```
 
----
-
-## 10. Resultado esperado del dataset
-
-El procesamiento debe generar aproximadamente:
+**Resultado esperado (aproximado):**
 
 ```text
-Total imágenes procesadas: 2487
-Total imágenes descartadas: 19
+Total imágenes procesadas : 2487
+Train                     : 1740
+Validation                : 373
+Test                       : 374
 ```
 
-Distribución aproximada:
-
-```text
-arroz_y_granos: 528
-pastas: 204
-aceites: 127
-salsas_y_condimentos: 322
-cafe_chocolate: 693
-enlatados: 217
-azucar_sal: 396
-```
-
-División aproximada:
-
-```text
-Train: 1740
-Validation: 373
-Test: 374
-```
-
-Estos valores pueden variar ligeramente si el dataset cambia.
+| Categoría | Imágenes |
+|-----------|----------|
+| arroz_y_granos | 528 |
+| cafe_chocolate | 693 |
+| azucar_sal | 396 |
+| salsas_y_condimentos | 322 |
+| enlatados | 217 |
+| pastas | 204 |
+| aceites | 127 |
 
 ---
 
-## 11. Entrenar el modelo
-
-Después de preparar el dataset, entrenar el modelo:
+## Entrenar el modelo
 
 ```powershell
 python scripts/train_model.py
 ```
 
-Este script realiza:
-
-- Carga de imágenes desde `train`, `validation` y `test`.
-- Uso de MobileNetV2 con Transfer Learning.
-- Data augmentation.
-- Class weights.
-- Entrenamiento del modelo.
-- Evaluación con test.
-- Generación de matriz de confusión.
-- Generación de reporte de clasificación.
-- Guardado del modelo.
-
-Al terminar, se debe crear:
+El script usa MobileNetV2 con Transfer Learning (15 épocas, EarlyStopping,
+ReduceLROnPlateau, class weights). Al terminar genera:
 
 ```text
 trained_models/product_classifier.keras
@@ -394,560 +285,406 @@ trained_models/accuracy_loss.png
 trained_models/confusion_matrix.png
 ```
 
-El archivo más importante es:
+**Resultado obtenido en la versión actual:**
 
 ```text
-trained_models/product_classifier.keras
-```
-
-Ese archivo contiene el modelo entrenado.
-
----
-
-## 12. Resultado esperado del entrenamiento
-
-En la versión desarrollada, el modelo obtuvo aproximadamente:
-
-```text
-Test accuracy: 0.7299
-Test loss: 0.8321
-```
-
-Esto equivale a una precisión aproximada del:
-
-```text
-72.99%
-```
-
-El resultado puede variar ligeramente dependiendo del equipo y la ejecución.
-
----
-
-## 13. Probar una predicción individual
-
-Después de entrenar el modelo, se puede probar una imagen individual:
-
-```powershell
-python scripts/predict_image.py --image "ruta/a/imagen.jpg"
-```
-
-Ejemplo:
-
-```powershell
-python scripts/predict_image.py --image "datasets/processed/test/cafe_chocolate/imagen.jpg"
-```
-
-Salida esperada:
-
-```text
-Categoría predicha: cafe_chocolate
-Confianza: 99.26%
-
-Top predicciones:
-1. cafe_chocolate - 99.26%
-2. salsas_y_condimentos - 0.43%
-3. pastas - 0.21%
+Test accuracy : 0.7299  (≈ 73 %)
+Test loss     : 0.8321
 ```
 
 ---
 
-## 14. Predecir y registrar producto localmente
+## Exportar el modelo a ONNX
 
-También se puede predecir una imagen y registrarla directamente en SQLite:
-
-```powershell
-python scripts/predict_and_register.py --image "ruta/a/imagen.jpg" --name "Nombre del producto" --quantity 1
-```
-
-Ejemplo:
+Después de entrenar, convertir el modelo al formato ONNX para que la API pueda
+usarlo sin cargar TensorFlow:
 
 ```powershell
-python scripts/predict_and_register.py --image "datasets/processed/test/cafe_chocolate/imagen.jpg" --name "Nescafe Tradicion 170g" --quantity 5
+python scripts/export_to_onnx.py
 ```
 
-Esto genera un código como:
+Genera:
 
 ```text
-INV-CAF-202605-0001
+trained_models/product_classifier.onnx  (≈ 9.8 MB)
 ```
 
-Y registra el producto en:
-
-```text
-app/database/inventory.db
-```
+> Este paso solo es necesario la primera vez o cada vez que se reentrene el modelo.
 
 ---
 
-## 15. Listar inventario desde terminal
+## Migrar datos de SQLite a PostgreSQL (opcional)
 
-Para ver los productos registrados:
+Si ya existen registros en la base de datos local (`app/database/inventory.db`),
+se pueden migrar a PostgreSQL con:
 
 ```powershell
-python scripts/list_inventory.py
+python scripts/migrate_to_postgres.py
 ```
 
-Salida esperada:
-
-```text
-Inventario registrado
-
-ID: 1
-Código: INV-CAF-202605-0001
-Nombre: Nescafe Tradicion 170g
-Categoría: cafe_chocolate
-Cantidad: 5
-Confianza: 99.26%
-Estado: activo
-```
+El script lee todos los registros de SQLite e inserta los que no existan en PostgreSQL
+usando `ON CONFLICT DO NOTHING`.
 
 ---
 
-## 16. Ejecutar la API Flask
+## Ejecutar el sistema
 
-Para usar la API, ejecutar:
+El sistema requiere dos terminales abiertas de forma simultánea.
 
-```powershell
-python -m app.api.app
-```
-
-Debe aparecer:
-
-```text
-Running on http://127.0.0.1:5000
-```
-
-No cerrar esta terminal mientras se use la aplicación.
-
----
-
-## 17. Probar API en navegador
-
-Abrir:
-
-```text
-http://127.0.0.1:5000/health
-```
-
-Debe mostrar:
-
-```json
-{
-  "message": "API funcionando correctamente",
-  "status": "ok"
-}
-```
-
-Para ver productos registrados:
-
-```text
-http://127.0.0.1:5000/products
-```
-
----
-
-## 18. Ejecutar la interfaz Streamlit
-
-Abrir una segunda terminal.
-
-Activar el entorno virtual:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Ejecutar Streamlit:
-
-```powershell
-streamlit run streamlit_app/main.py
-```
-
-La aplicación se abrirá normalmente en:
-
-```text
-http://localhost:8501
-```
-
----
-
-## 19. Uso correcto del sistema completo
-
-Para usar el sistema completo se necesitan dos terminales abiertas.
-
-### Terminal 1: API Flask
+### Terminal 1 — API Flask
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python -m app.api.app
 ```
 
-### Terminal 2: Streamlit
+La API queda disponible en `http://127.0.0.1:5000`.
+
+### Terminal 2 — Interfaz Streamlit
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 streamlit run streamlit_app/main.py
 ```
 
----
-
-## 20. Flujo de uso en Streamlit
-
-En la interfaz:
-
-1. Entrar a la pestaña **Clasificar producto**.
-2. Seleccionar método de entrada:
-   - Subir imagen.
-   - Usar cámara.
-3. Cargar o capturar una imagen.
-4. Presionar **Clasificar producto**.
-5. Revisar:
-   - Categoría predicha.
-   - Confianza.
-   - Código generado.
-   - Top predicciones.
-6. Escribir o corregir:
-   - Nombre del producto.
-   - Cantidad.
-   - Categoría.
-7. Presionar **Guardar en inventario**.
-8. Ir a la pestaña **Inventario** para consultar los registros.
+La interfaz se abre automáticamente en `http://localhost:8501`.
 
 ---
 
-## 21. Endpoints principales de la API
+## Uso del sistema
 
-### GET `/health`
+La interfaz Streamlit tiene cuatro pestañas:
+
+### Pestaña 1 — Clasificar producto
+
+1. Seleccionar método de entrada: **Subir imagen** o **Usar cámara**.
+2. Cargar o capturar la imagen del producto.
+3. Presionar **Clasificar producto**.
+4. Revisar categoría predicha, confianza y código generado.
+5. Ajustar nombre del producto, cantidad y categoría si es necesario.
+6. Presionar **Guardar en inventario**.
+
+### Pestaña 2 — Cargue masivo
+
+1. Elegir el modo: **Subir imágenes** (múltiples archivos) o **Subir ZIP**.
+2. Cargar los archivos (formatos válidos: `jpg`, `jpeg`, `png`, `webp`).
+3. Presionar **Clasificar todo** — el sistema procesa hasta 100 imágenes.
+4. Revisar la tabla de resultados con categoría y confianza por archivo.
+5. Descargar los resultados en CSV con **Exportar resultados a CSV**.
+6. Guardar todos los productos válidos con **Guardar todo en inventario**.
+
+### Pestaña 3 — Inventario
+
+Muestra todos los productos registrados. Incluye botón **Actualizar inventario**.
+
+### Pestaña 4 — Acerca del modelo
+
+Información del modelo entrenado: arquitectura, categorías, archivos generados
+y estado del reporte de entrenamiento.
+
+---
+
+## Endpoints de la API
+
+### `GET /health`
 
 Verifica que la API esté activa.
 
-```text
-http://127.0.0.1:5000/health
+```powershell
+curl.exe http://127.0.0.1:5000/health
 ```
 
-### GET `/products`
-
-Lista los productos registrados.
-
-```text
-http://127.0.0.1:5000/products
+```json
+{ "status": "ok", "message": "API funcionando correctamente" }
 ```
 
-### POST `/predict`
+---
 
-Recibe una imagen y devuelve:
+### `POST /predict`
 
-- Categoría predicha.
-- Confianza.
-- Top 3 predicciones.
-- Código generado.
+Clasifica una imagen individual y devuelve la predicción junto con un código
+de inventario generado.
 
-Ejemplo con PowerShell:
+**Form-data:** campo `image` con el archivo de imagen.
 
 ```powershell
-curl.exe -X POST `
-  -F "image=@ruta/a/imagen.jpg" `
-  http://127.0.0.1:5000/predict
+curl.exe -X POST -F "image=@ruta/imagen.jpg" http://127.0.0.1:5000/predict
 ```
 
-### POST `/products`
+```json
+{
+  "prediction": {
+    "predicted_category": "cafe_chocolate",
+    "confidence": 0.9976,
+    "confidence_percent": 99.76,
+    "top_predictions": [
+      { "category": "cafe_chocolate", "confidence": 0.9976, "confidence_percent": 99.76 },
+      { "category": "salsas_y_condimentos", "confidence": 0.0016, "confidence_percent": 0.16 },
+      { "category": "azucar_sal", "confidence": 0.0004, "confidence_percent": 0.04 }
+    ]
+  },
+  "generated_code": "INV-CAF-202605-0001"
+}
+```
+
+---
+
+### `POST /predict/batch`
+
+Clasifica múltiples imágenes en una sola llamada.
+Acepta **uno** de los dos campos (no ambos a la vez):
+
+- `files`: uno o más archivos de imagen.
+- `zip`: un archivo `.zip` con imágenes (se procesan subdirectorios de forma recursiva).
+
+**Límite:** 100 imágenes por request.
+
+```powershell
+# Con archivos sueltos
+curl.exe -X POST `
+  -F "files=@imagen1.jpg" `
+  -F "files=@imagen2.jpg" `
+  http://127.0.0.1:5000/predict/batch
+
+# Con ZIP
+curl.exe -X POST -F "zip=@productos.zip" http://127.0.0.1:5000/predict/batch
+```
+
+```json
+{
+  "total_received": 2,
+  "total_processed": 2,
+  "total_skipped": 0,
+  "results": [
+    {
+      "filename": "imagen1.jpg",
+      "predicted_category": "cafe_chocolate",
+      "confidence": 0.9976,
+      "confidence_percent": 99.76,
+      "top_predictions": [...],
+      "generated_code": "INV-CAF-202605-0004"
+    },
+    {
+      "filename": "imagen2.jpg",
+      "predicted_category": "aceites",
+      "confidence": 0.9243,
+      "confidence_percent": 92.43,
+      "top_predictions": [...],
+      "generated_code": "INV-ACE-202605-0005"
+    }
+  ]
+}
+```
+
+Si una imagen no puede procesarse, el resultado incluye `"error": "descripción"` en
+lugar de los campos de predicción, y el proceso continúa con las demás.
+
+---
+
+### `POST /products`
 
 Registra un producto en inventario.
 
-Ejemplo usando PowerShell:
-
 ```powershell
 $body = @{
-  code = "INV-CAF-202605-0002"
-  name = "Nucita Nuggets Halloween 240g"
-  category = "cafe_chocolate"
-  quantity = 2
-  image_path = "datasets/processed/test/cafe_chocolate/imagen.jpg"
-  confidence = 0.8812
+  code       = "INV-CAF-202605-0001"
+  name       = "Nescafe Tradicion 170g"
+  category   = "cafe_chocolate"
+  quantity   = 2
+  image_path = "imagen.jpg"
+  confidence = 0.9976
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://127.0.0.1:5000/products" -Method POST -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://127.0.0.1:5000/products" `
+  -Method POST -ContentType "application/json" -Body $body
 ```
 
 ---
 
-## 22. Generación de códigos
+### `GET /products`
 
-Los códigos siguen esta estructura:
-
-```text
-INV-CAT-YYYYMM-0001
-```
-
-Ejemplo:
-
-```text
-INV-CAF-202605-0001
-```
-
-Prefijos usados:
-
-```text
-ARG = arroz_y_granos
-PAS = pastas
-ACE = aceites
-SAL = salsas_y_condimentos
-CAF = cafe_chocolate
-ENL = enlatados
-AZS = azucar_sal
-```
-
----
-
-## 23. Base de datos
-
-La base de datos usada es SQLite.
-
-Archivo:
-
-```text
-app/database/inventory.db
-```
-
-Tabla principal:
-
-```text
-products
-```
-
-Campos:
-
-```text
-id
-code
-name
-category
-quantity
-image_path
-confidence
-created_at
-status
-```
-
----
-
-## 24. Regla de confianza
-
-El sistema interpreta la confianza así:
-
-```text
-Confianza >= 80%
-Predicción confiable.
-
-Confianza entre 50% y 79%
-Predicción con confianza media. Se recomienda revisar antes de guardar.
-
-Confianza < 50%
-Predicción con baja confianza. Se recomienda corregir manualmente.
-```
-
----
-
-## 25. Problemas comunes
-
-### TensorFlow no se instala
-
-Probablemente se está usando Python 3.14.
-
-Solución:
+Lista todos los productos registrados.
 
 ```powershell
+curl.exe http://127.0.0.1:5000/products
+```
+
+---
+
+### `GET /products/<code>`
+
+Busca un producto por su código único.
+
+```powershell
+curl.exe http://127.0.0.1:5000/products/INV-CAF-202605-0001
+```
+
+---
+
+## Scripts disponibles
+
+| Script | Descripción |
+|--------|-------------|
+| `prepare_hf_dataset.py` | Descarga y organiza el dataset desde Hugging Face |
+| `train_model.py` | Entrena el clasificador MobileNetV2 |
+| `export_to_onnx.py` | Convierte `product_classifier.keras` → `product_classifier.onnx` |
+| `migrate_to_postgres.py` | Migra registros de SQLite a PostgreSQL |
+| `predict_image.py` | Clasifica una imagen desde la consola |
+| `predict_and_register.py` | Clasifica y registra en BD desde la consola |
+| `list_inventory.py` | Lista el inventario desde la consola |
+
+---
+
+## Categorías y códigos de inventario
+
+El modelo clasifica productos en siete categorías:
+
+| Categoría técnica | Nombre visible | Prefijo de código |
+|-------------------|---------------|-------------------|
+| `arroz_y_granos` | Arroz y granos | `ARG` |
+| `pastas` | Pastas | `PAS` |
+| `aceites` | Aceites | `ACE` |
+| `salsas_y_condimentos` | Salsas y condimentos | `SAL` |
+| `cafe_chocolate` | Café y chocolate | `CAF` |
+| `enlatados` | Enlatados | `ENL` |
+| `azucar_sal` | Azúcar y sal | `AZS` |
+
+**Formato del código de inventario:**
+
+```text
+INV-{PREFIJO}-{YYYYMM}-{CONSECUTIVO}
+
+Ejemplo: INV-CAF-202605-0001
+```
+
+**Regla de confianza:**
+
+| Confianza | Interpretación |
+|-----------|---------------|
+| ≥ 80 % | Predicción confiable |
+| 50 % – 79 % | Confianza media — revisar antes de guardar |
+| < 50 % | Baja confianza — corregir manualmente |
+
+---
+
+## Archivos excluidos del repositorio
+
+Los siguientes archivos **no se suben a GitHub** y deben generarse localmente:
+
+```text
+.venv/                              ← entorno virtual
+.env                                ← credenciales de BD
+datasets/processed/train/           ← imágenes de entrenamiento
+datasets/processed/validation/      ← imágenes de validación
+datasets/processed/test/            ← imágenes de prueba
+datasets/processed/otros/           ← imágenes sin clasificar
+trained_models/product_classifier.keras  ← modelo Keras (grande)
+```
+
+Los archivos `.onnx`, reportes `.json` y gráficas `.png` **sí se suben**.
+
+---
+
+## Problemas comunes
+
+### La API no arranca / error de importación
+
+Ejecutar siempre desde la raíz del proyecto usando el módulo:
+
+```powershell
+python -m app.api.app
+```
+
+No usar `python app/api/app.py` directamente.
+
+### El modelo ONNX no existe
+
+Si falta `trained_models/product_classifier.onnx`, primero entrenar el modelo y
+luego exportarlo:
+
+```powershell
+python scripts/train_model.py
+python scripts/export_to_onnx.py
+```
+
+### La base de datos no conecta
+
+1. Verificar que el archivo `.env` existe en la raíz del proyecto.
+2. Verificar que `DATABASE_URL` tiene `?sslmode=require` al final (requerido por Supabase).
+3. Verificar que la tabla `products` fue creada en Supabase.
+
+### Error al activar el entorno virtual
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+.\.venv\Scripts\Activate.ps1
+```
+
+### El entorno usa Python incorrecto
+
+Verificar la versión:
+
+```powershell
+python --version
+```
+
+Si no muestra `Python 3.11.x`, recrear el entorno:
+
+```powershell
+deactivate
+Remove-Item -Recurse -Force .venv
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-### No se reconoce el comando pip
+### El modelo clasifica mal algunas imágenes
 
-Usar:
+El modelo tiene una precisión aproximada del 73 %. Para mejores resultados:
 
-```powershell
-python -m pip install -r requirements.txt
-```
-
-en lugar de:
-
-```powershell
-pip install -r requirements.txt
-```
-
-### La API Flask no aparece activa en Streamlit
-
-Verificar que en una terminal esté corriendo:
-
-```powershell
-python -m app.api.app
-```
-
-Luego recargar Streamlit.
-
-### Error: `app is not a package`
-
-Ejecutar Flask así:
-
-```powershell
-python -m app.api.app
-```
-
-No usar:
-
-```powershell
-python app/api/app.py
-```
-
-Además verificar que existan:
-
-```text
-app/__init__.py
-app/api/__init__.py
-app/services/__init__.py
-```
-
-### Error al activar entorno virtual
-
-Ejecutar:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-Luego activar:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-### El modelo se equivoca en algunas imágenes
-
-Esto es normal. El modelo obtuvo una precisión aproximada del 72.99%.
-
-Se recomienda:
-
-- Usar imágenes claras.
-- Evitar fondos con muchos objetos.
-- Usar buena iluminación.
-- Centrar el producto.
+- Usar imágenes con buena iluminación.
+- Centrar el producto en el encuadre.
+- Evitar fondos muy cargados.
 - Corregir la categoría manualmente en Streamlit si es necesario.
 
 ---
 
-## 26. Archivos importantes
-
-### Código principal
-
-```text
-app/api/app.py
-app/api/prediction_utils.py
-app/services/code_generator.py
-app/services/inventory_service.py
-streamlit_app/main.py
-```
-
-### Scripts de apoyo
-
-```text
-scripts/prepare_hf_dataset.py
-scripts/train_model.py
-scripts/predict_image.py
-scripts/predict_and_register.py
-scripts/list_inventory.py
-```
-
-### Archivos generados
-
-```text
-datasets/processed/
-trained_models/
-app/database/inventory.db
-```
-
----
-
-## 27. Resumen rápido para integrantes del equipo
-
-Después de clonar el proyecto, cada integrante debe ejecutar:
+## Resumen rápido para nuevos integrantes
 
 ```powershell
+# 1. Clonar y entrar al proyecto
+git clone URL_DEL_REPOSITORIO
+cd programacion-avanzada-trabajo-final
+
+# 2. Entorno virtual
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python scripts/prepare_hf_dataset.py --image-column image --name-column name --category-column subcategory --no-streaming --clean-output
+
+# 3. Configurar .env con DATABASE_URL de Supabase
+# (crear el archivo manualmente)
+
+# 4. Preparar dataset
+python scripts/prepare_hf_dataset.py --clean-output
+
+# 5. Entrenar y exportar modelo
 python scripts/train_model.py
-python -m app.api.app
+python scripts/export_to_onnx.py
+
+# 6. Ejecutar el sistema (dos terminales)
+python -m app.api.app          # Terminal 1
+streamlit run streamlit_app/main.py  # Terminal 2
 ```
-
-En otra terminal:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-streamlit run streamlit_app/main.py
-```
-
----
-
-## Estado final del proyecto
-
-El proyecto cuenta con:
-
-- Dataset procesado.
-- Modelo entrenado.
-- Predicción individual.
-- Generación de códigos.
-- Base de datos SQLite.
-- API Flask.
-- Interfaz Streamlit.
-- Carga de imagen.
-- Captura por cámara.
-- Registro de productos.
-- Consulta de inventario.
-
-El sistema está funcional como una primera versión completa para clasificación e inventariado de productos de despensa.
-
----
-
-## Mejoras futuras
-
-Se pueden implementar las siguientes mejoras:
-
-- Mejorar el dataset.
-- Agregar más imágenes propias.
-- Balancear mejor las clases.
-- Aplicar fine-tuning al modelo.
-- Exportar inventario a Excel.
-- Agregar edición y eliminación de productos.
-- Generar códigos QR.
-- Leer códigos de barras.
-- Agregar autenticación.
-- Usar PostgreSQL.
-- Desplegar en la nube.
 
 ---
 
 ## Autores
 
-Proyecto desarrollado por:
+Proyecto desarrollado para el curso de **Programación Avanzada**.
 
 ```text
 Nombre Integrante 1
 Nombre Integrante 2
 Nombre Integrante 3
 ```
-
-Curso:
-
-```text
-Programación Avanzada
-```
-
----
-
-## Conclusión
-
-Este proyecto integra inteligencia artificial, procesamiento de imágenes, API REST, base de datos e interfaz gráfica para construir un sistema inteligente de inventario.
-
-El sistema permite clasificar productos de despensa mediante imágenes, generar códigos únicos y registrar productos dentro de un inventario empresarial de forma automatizada.

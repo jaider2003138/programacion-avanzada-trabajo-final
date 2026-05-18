@@ -127,6 +127,47 @@ def format_category(category: str) -> str:
     return CATEGORY_LABELS.get(category, category)
 
 
+def predict_batch_files(
+    files_data: list | None = None,
+    zip_data=None,
+) -> dict[str, Any] | None:
+    """
+    Envía imágenes al endpoint /predict/batch y devuelve el resultado.
+    """
+    try:
+        if files_data:
+            files = [
+                ("files", (f.name, f.getvalue(), f.type or "image/jpeg"))
+                for f in files_data
+            ]
+            response = requests.post(
+                f"{API_BASE_URL}/predict/batch",
+                files=files,
+                timeout=300,
+            )
+        else:
+            response = requests.post(
+                f"{API_BASE_URL}/predict/batch",
+                files={"zip": (zip_data.name, zip_data.getvalue(), "application/zip")},
+                timeout=300,
+            )
+
+        if response.status_code == 400:
+            st.error(response.json().get("error", "Error en la solicitud."))
+            return None
+
+        if response.status_code != 200:
+            st.error("Error al procesar el cargue masivo.")
+            st.json(response.json())
+            return None
+
+        return response.json()
+
+    except requests.RequestException as exc:
+        st.error(f"No se pudo conectar con la API: {exc}")
+        return None
+
+
 def render_prediction_result(prediction_response: dict[str, Any]) -> None:
     """
     Muestra el resultado de predicción en pantalla.
@@ -238,6 +279,7 @@ def main() -> None:
     tabs = st.tabs(
         [
             "Clasificar producto",
+            "Cargue masivo",
             "Inventario",
             "Acerca del modelo",
         ]
@@ -344,12 +386,143 @@ def main() -> None:
             st.info("Sube una imagen para iniciar la clasificación.")
 
     with tabs[1]:
+        st.header("Cargue masivo de imágenes")
+
+        input_mode = st.radio(
+            "Selecciona el modo de entrada",
+            options=["Subir imágenes", "Subir ZIP"],
+            horizontal=True,
+            key="batch_input_mode",
+        )
+
+        uploaded_files = None
+        uploaded_zip = None
+
+        if input_mode == "Subir imágenes":
+            uploaded_files = st.file_uploader(
+                "Sube una o más imágenes del producto",
+                type=["jpg", "jpeg", "png", "webp"],
+                accept_multiple_files=True,
+                key="batch_files",
+            )
+            if uploaded_files:
+                st.caption(f"{len(uploaded_files)} archivo(s) seleccionado(s).")
+        else:
+            uploaded_zip = st.file_uploader(
+                "Sube un archivo ZIP con imágenes",
+                type=["zip"],
+                key="batch_zip",
+            )
+
+        can_classify = bool(
+            (input_mode == "Subir imágenes" and uploaded_files)
+            or (input_mode == "Subir ZIP" and uploaded_zip)
+        )
+
+        if st.button("Clasificar todo", disabled=not can_classify, key="btn_batch_classify"):
+            with st.spinner("Clasificando imágenes..."):
+                batch_result = predict_batch_files(
+                    files_data=uploaded_files if input_mode == "Subir imágenes" else None,
+                    zip_data=uploaded_zip if input_mode == "Subir ZIP" else None,
+                )
+            if batch_result is not None:
+                st.session_state["batch_result"] = batch_result
+
+        if st.session_state.get("batch_result"):
+            batch = st.session_state["batch_result"]
+            results = batch.get("results", [])
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total recibidas", batch["total_received"])
+            with col2:
+                st.metric("Procesadas correctamente", batch["total_processed"])
+            with col3:
+                st.metric("Con error / omitidas", batch["total_skipped"])
+
+            ok_results = [r for r in results if "error" not in r]
+            error_results = [r for r in results if "error" in r]
+
+            if ok_results:
+                st.subheader("Resultados de clasificación")
+
+                table_data = [
+                    {
+                        "Archivo": r["filename"],
+                        "Categoría": format_category(r["predicted_category"]),
+                        "Confianza (%)": round(r["confidence_percent"], 2),
+                    }
+                    for r in ok_results
+                ]
+                df_results = pd.DataFrame(table_data)
+                st.dataframe(df_results, use_container_width=True)
+
+                csv_bytes = df_results.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "Exportar resultados a CSV",
+                    data=csv_bytes,
+                    file_name="resultados_clasificacion.csv",
+                    mime="text/csv",
+                    key="btn_export_csv",
+                )
+
+                if st.button("Guardar todo en inventario", key="btn_batch_save"):
+                    progress = st.progress(0)
+                    saved = 0
+                    failed = 0
+                    total = len(ok_results)
+
+                    for i, result in enumerate(ok_results):
+                        payload = {
+                            "code": result["generated_code"],
+                            "name": Path(result["filename"]).stem,
+                            "category": result["predicted_category"],
+                            "quantity": 1,
+                            "image_path": result["filename"],
+                            "confidence": result["confidence"],
+                        }
+                        try:
+                            resp = requests.post(
+                                f"{API_BASE_URL}/products",
+                                json=payload,
+                                timeout=30,
+                            )
+                            if resp.status_code in (200, 201):
+                                saved += 1
+                            else:
+                                failed += 1
+                        except requests.RequestException:
+                            failed += 1
+
+                        progress.progress((i + 1) / total)
+
+                    if saved > 0:
+                        st.success(f"{saved} producto(s) guardado(s) en inventario.")
+                    if failed > 0:
+                        st.warning(
+                            f"{failed} producto(s) no se pudieron guardar "
+                            "(puede que el código ya exista en la BD)."
+                        )
+
+                    st.session_state["batch_result"] = None
+
+            if error_results:
+                with st.expander(f"Imágenes con error ({len(error_results)})"):
+                    for r in error_results:
+                        st.error(f"**{r['filename']}** — {r['error']}")
+
+        else:
+            st.info(
+                "Sube imágenes o un ZIP y presiona 'Clasificar todo' para ver los resultados."
+            )
+
+    with tabs[2]:
         render_inventory_table()
 
         if st.button("Actualizar inventario"):
             st.rerun()
 
-    with tabs[2]:
+    with tabs[3]:
         st.header("Información del modelo")
 
         st.write(

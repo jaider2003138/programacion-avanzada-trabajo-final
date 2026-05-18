@@ -9,7 +9,9 @@ Ejecutar desde la raíz del proyecto:
 
 from __future__ import annotations
 
+import io
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +51,7 @@ def home():
             "endpoints": [
                 "GET /health",
                 "POST /predict",
+                "POST /predict/batch",
                 "POST /products",
                 "GET /products",
                 "GET /products/<code>",
@@ -110,6 +113,109 @@ def predict():
                 "detail": str(exc),
             }
         ), 500
+
+
+@app.route("/predict/batch", methods=["POST"])
+def predict_batch():
+    """
+    Clasifica múltiples imágenes en una sola llamada.
+
+    Form-data esperado (solo uno de los dos campos):
+    - files: uno o más archivos de imagen (jpg, jpeg, png, webp)
+    - zip:   un archivo .zip que contiene imágenes (se procesa de forma recursiva)
+
+    Límite: 100 imágenes por request.
+    """
+    VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+    MAX_IMAGES = 100
+
+    has_files = bool(request.files.getlist("files"))
+    has_zip = "zip" in request.files and request.files["zip"].filename != ""
+
+    if not has_files and not has_zip:
+        return jsonify(
+            {"error": "Debes enviar 'files' (imágenes) o 'zip' (archivo ZIP)."}
+        ), 400
+
+    if has_files and has_zip:
+        return jsonify(
+            {"error": "Envía solo 'files' o solo 'zip', no ambos a la vez."}
+        ), 400
+
+    images: list[tuple[str, bytes]] = []
+
+    if has_files:
+        for uploaded in request.files.getlist("files"):
+            if not uploaded.filename:
+                continue
+            if Path(uploaded.filename).suffix.lower() in VALID_EXTENSIONS:
+                images.append((uploaded.filename, uploaded.read()))
+
+    else:
+        zip_file = request.files["zip"]
+        try:
+            with zipfile.ZipFile(io.BytesIO(zip_file.read())) as zf:
+                for entry in zf.infolist():
+                    if entry.is_dir():
+                        continue
+                    if Path(entry.filename).suffix.lower() in VALID_EXTENSIONS:
+                        images.append((Path(entry.filename).name, zf.read(entry.filename)))
+        except zipfile.BadZipFile:
+            return jsonify({"error": "El archivo ZIP no es válido o está corrupto."}), 400
+
+    total_received = len(images)
+
+    if total_received > MAX_IMAGES:
+        return jsonify(
+            {
+                "error": (
+                    f"Se detectaron {total_received} imágenes válidas. "
+                    f"El máximo permitido es {MAX_IMAGES}."
+                ),
+                "total_received": total_received,
+                "limit": MAX_IMAGES,
+            }
+        ), 400
+
+    if total_received == 0:
+        return jsonify(
+            {"total_received": 0, "total_processed": 0, "total_skipped": 0, "results": []}
+        ), 200
+
+    base_sequence = get_next_sequence()
+    results: list[dict[str, Any]] = []
+    total_skipped = 0
+
+    for offset, (filename, raw_bytes) in enumerate(images):
+        try:
+            image = Image.open(io.BytesIO(raw_bytes))
+            prediction = predict_pil_image(image)
+            generated_code = generate_inventory_code(
+                prediction["predicted_category"],
+                base_sequence + offset,
+            )
+            results.append(
+                {
+                    "filename": filename,
+                    "predicted_category": prediction["predicted_category"],
+                    "confidence": prediction["confidence"],
+                    "confidence_percent": prediction["confidence_percent"],
+                    "top_predictions": prediction["top_predictions"],
+                    "generated_code": generated_code,
+                }
+            )
+        except Exception as exc:
+            total_skipped += 1
+            results.append({"filename": filename, "error": str(exc)})
+
+    return jsonify(
+        {
+            "total_received": total_received,
+            "total_processed": total_received - total_skipped,
+            "total_skipped": total_skipped,
+            "results": results,
+        }
+    ), 200
 
 
 @app.route("/products", methods=["POST"])

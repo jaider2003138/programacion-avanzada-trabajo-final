@@ -1,6 +1,6 @@
 {
   "dataset_original": "valentinafevu/productos-supermercado",
-  "processing_date": "2026-05-09T22:43:26.670029+00:00",
+  "processing_date": "2026-05-14T22:45:23.238576+00:00",
   "output_dir": "datasets\\processed",
   "image_size": 224,
   "image_format": "jpg",
@@ -41,7 +41,7 @@
     "contains_categories": true,
     "examples": [
       {
-        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\0.webp)",
+        "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\0.webp)",
         "name": "Arroz Diana blanco x10kg ",
         "supermarket_category": "supermercado",
         "main_category": "despensa",
@@ -50,7 +50,7 @@
         "ai_generated_description": "El producto es azúcar en forma de perlas, presentado en una bolsa con capacidad para 10 kg. La forma de las perlas de azúcar es esférica y uniforme, lo que facilita su uso en diversas aplicaciones culinarias y de repostería. La cantidad de 10 kg indica que es un paquete grande, adecuado para uso int..."
       },
       {
-        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\1.webp)",
+        "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\1.webp)",
         "name": "Arroz Diana blanco x5kg ",
         "supermarket_category": "supermercado",
         "main_category": "despensa",
@@ -59,7 +59,7 @@
         "ai_generated_description": "El producto es un paquete que contiene arroz blanco. El paquete tiene una forma rectangular y contiene 5 kilogramos de arroz. El arroz está presentado en una imagen grande en el paquete, lo que sugiere que es el contenido principal. No hay información adicional sobre el tipo de arroz o su procesamie..."
       },
       {
-        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\2.webp)",
+        "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\2.webp)",
         "name": "Arroz Sonora x10kg ",
         "supermarket_category": "supermercado",
         "main_category": "despensa",
@@ -68,7 +68,7 @@
         "ai_generated_description": "El producto es arroz, presentado en una bolsa. La cantidad de arroz en la bolsa es de un kilogramo. La forma del arroz es granular, típica de este tipo de producto. El tamaño de los granos es uniforme, lo que sugiere que es un arroz de buena calidad. La bolsa contiene una cantidad considerable de ar..."
       },
       {
-        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\3.webp)",
+        "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\3.webp)",
         "name": "Arroz Diana blanco x3kg ",
         "supermarket_category": "supermercado",
         "main_category": "despensa",
@@ -77,7 +77,7 @@
         "ai_generated_description": "El producto es un paquete que contiene arroz blanco. El arroz está presentado en una sola porción dentro del paquete, lo que sugiere que se trata de una cantidad considerable. El tamaño del paquete indica que contiene 3000 gramos de arroz. La forma en que se presenta el arroz, en una gran masa blanc..."
       },
       {
-        "image": "Image(path=C:/Users/user/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\4.webp)",
+        "image": "Image(path=C:/Users/User/.cache/huggingface/hub/datasets--valentinafevu--productos-supermercado/snapshots/094c86cf43c426d6b56d71616b1edc4c017faefc/train\\4.webp)",
         "name": "Arroz Diana Premium blanco x4000g ",
         "supermarket_category": "supermercado",
         "main_category": "despensa",
