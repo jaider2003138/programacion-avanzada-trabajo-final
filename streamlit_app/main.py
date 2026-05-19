@@ -13,7 +13,11 @@ Terminal 2:
 
 from __future__ import annotations
 
+import io
+import json
 import os
+from datetime import datetime
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -289,6 +293,721 @@ def render_inventory_table() -> None:
     )
 
 
+# ── Export helpers ───────────────────────────────────────────────────────────
+
+def _xlsx_styles():
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    header_fill = PatternFill("solid", fgColor="E8611A")
+    alt_fill    = PatternFill("solid", fgColor="F5F5F5")
+    header_font = Font(color="FFFFFF", bold=True)
+    data_font   = Font(color="091635")
+    center      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin        = Side(style="thin", color="D0D0D0")
+    bdr         = Border(left=thin, right=thin, top=thin, bottom=thin)
+    return header_fill, alt_fill, header_font, data_font, center, bdr
+
+
+def _set_col_widths(ws, col_data: list[tuple[str, list]]) -> None:
+    from openpyxl.utils import get_column_letter
+    for ci, (header, values) in enumerate(col_data, start=1):
+        max_len = max([len(str(header))] + [len(str(v)) for v in values], default=10)
+        ws.column_dimensions[get_column_letter(ci)].width = min(max_len + 4, 50)
+
+
+def _build_inventory_xlsx(flt: pd.DataFrame) -> bytes:
+    from openpyxl import Workbook
+    header_fill, alt_fill, header_font, data_font, center, bdr = _xlsx_styles()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario"
+
+    col_map = [
+        ("id",        "ID"),
+        ("code",      "Código"),
+        ("name",      "Nombre"),
+        ("category",  "Categoría"),
+        ("quantity",  "Cantidad"),
+        ("_conf_pct", "Confianza (%)"),
+        ("created_at","Fecha registro"),
+        ("status",    "Estado"),
+    ]
+    existing = [(src, lbl) for src, lbl in col_map if src in flt.columns]
+
+    ws.row_dimensions[1].height = 25
+    for ci, (_, lbl) in enumerate(existing, start=1):
+        cell = ws.cell(row=1, column=ci, value=lbl)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center
+        cell.border = bdr
+
+    df = flt.reset_index(drop=True)
+    for ri, row in df.iterrows():
+        row_fill = alt_fill if ri % 2 == 1 else None
+        for ci, (src, _) in enumerate(existing, start=1):
+            v = row.get(src, "")
+            if src == "category":
+                v = CATEGORY_LABELS.get(str(v), str(v))
+            elif src == "_conf_pct":
+                try:
+                    v = round(float(v), 2)
+                except (TypeError, ValueError):
+                    pass
+            elif src == "created_at":
+                v = str(v).replace("T", " ").split(".")[0]
+            cell = ws.cell(row=ri + 2, column=ci, value=v)
+            cell.font = data_font
+            cell.alignment = center
+            cell.border = bdr
+            if row_fill:
+                cell.fill = row_fill
+
+    col_data = []
+    for src, lbl in existing:
+        if src not in df.columns:
+            col_data.append((lbl, []))
+            continue
+        raw = df[src].tolist()
+        if src == "category":
+            vals = [CATEGORY_LABELS.get(str(v), str(v)) for v in raw]
+        elif src == "_conf_pct":
+            vals = [f"{float(v):.2f}" if v != "" else "" for v in raw]
+        elif src == "created_at":
+            vals = [str(v).replace("T", " ").split(".")[0] for v in raw]
+        else:
+            vals = [str(v) for v in raw]
+        col_data.append((lbl, vals))
+    _set_col_widths(ws, col_data)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _build_batch_xlsx(ok_results: list[dict[str, Any]]) -> bytes:
+    from openpyxl import Workbook
+    header_fill, alt_fill, header_font, data_font, center, bdr = _xlsx_styles()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Clasificacion masiva"
+
+    headers = ["Archivo", "Categoría", "Confianza (%)", "Top 2", "Top 3"]
+    ws.row_dimensions[1].height = 25
+    for ci, lbl in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=ci, value=lbl)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center
+        cell.border = bdr
+
+    for ri, r in enumerate(ok_results):
+        row_fill = alt_fill if ri % 2 == 1 else None
+        tops = r.get("top_predictions", [])
+        top2 = (
+            f"{CATEGORY_LABELS.get(tops[1]['category'], tops[1]['category'])} "
+            f"({tops[1]['confidence_percent']:.2f}%)"
+            if len(tops) >= 2 else ""
+        )
+        top3 = (
+            f"{CATEGORY_LABELS.get(tops[2]['category'], tops[2]['category'])} "
+            f"({tops[2]['confidence_percent']:.2f}%)"
+            if len(tops) >= 3 else ""
+        )
+        row_vals = [
+            r.get("filename", ""),
+            CATEGORY_LABELS.get(r.get("predicted_category", ""), r.get("predicted_category", "")),
+            round(float(r.get("confidence_percent", 0)), 2),
+            top2,
+            top3,
+        ]
+        for ci, v in enumerate(row_vals, start=1):
+            cell = ws.cell(row=ri + 2, column=ci, value=v)
+            cell.font = data_font
+            cell.alignment = center
+            cell.border = bdr
+            if row_fill:
+                cell.fill = row_fill
+
+    col_data = [
+        ("Archivo",       [r.get("filename", "") for r in ok_results]),
+        ("Categoría",     [CATEGORY_LABELS.get(r.get("predicted_category", ""), "") for r in ok_results]),
+        ("Confianza (%)", [round(float(r.get("confidence_percent", 0)), 2) for r in ok_results]),
+        ("Top 2",         [""]),
+        ("Top 3",         [""]),
+    ]
+    _set_col_widths(ws, col_data)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _build_inventory_pdf(
+    flt: pd.DataFrame,
+    total_prods: int,
+    total_cats: int,
+    total_stock: int,
+    avg_conf: float,
+) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.platypus import (
+        HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    )
+
+    ORANGE     = colors.HexColor("#E8611A")
+    LIGHT_GRAY = colors.HexColor("#F5F5F5")
+    MUTED      = colors.HexColor("#69738a")
+    DARK       = colors.HexColor("#091635")
+
+    class _NumberedCanvas(rl_canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            rl_canvas.Canvas.__init__(self, *args, **kwargs)
+            self._saved_page_states = []
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            num_pages = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self._draw_footer(num_pages)
+                rl_canvas.Canvas.showPage(self)
+            rl_canvas.Canvas.save(self)
+
+        def _draw_footer(self, total: int) -> None:
+            self.saveState()
+            self.setFont("Helvetica", 7.5)
+            self.setFillColor(MUTED)
+            self.drawString(
+                2 * cm, 1.2 * cm,
+                "Sistema Inteligente de Inventario — Reporte generado automaticamente",
+            )
+            self.drawRightString(
+                A4[0] - 2 * cm, 1.2 * cm,
+                f"Pagina {self._pageNumber} de {total}",
+            )
+            self.restoreState()
+
+    buf       = io.BytesIO()
+    timestamp = datetime.now().strftime("%d/%m/%Y a las %H:%M:%S")
+    avail_w   = A4[0] - 4 * cm
+
+    def _sty(name, **kw):
+        return ParagraphStyle(name, **kw)
+
+    title_sty = _sty("InvTitle", fontSize=18, fontName="Helvetica-Bold",
+                     textColor=DARK, spaceAfter=2)
+    sub_sty   = _sty("InvSub",   fontSize=12, fontName="Helvetica-Bold",
+                     textColor=ORANGE, spaceAfter=2)
+    date_sty  = _sty("InvDate",  fontSize=8.5, fontName="Helvetica", textColor=MUTED)
+    mc_sty    = _sty("MC", fontSize=9, fontName="Helvetica",
+                     textColor=DARK, alignment=TA_CENTER, leading=16)
+    hdr_sty   = _sty("TH", fontSize=8, fontName="Helvetica-Bold",
+                     textColor=colors.white, alignment=TA_CENTER)
+    cell_sty  = _sty("TD", fontSize=7.5, fontName="Helvetica",
+                     textColor=DARK, alignment=TA_CENTER)
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2.5*cm,
+        title="Reporte de Inventario",
+    )
+
+    story = []
+
+    # Header
+    story.append(Paragraph("Sistema Inteligente de Inventario", title_sty))
+    story.append(Paragraph("Reporte de Inventario", sub_sty))
+    story.append(Paragraph(f"Generado el {timestamp}", date_sty))
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width="100%", thickness=2, lineCap="round", color=ORANGE))
+    story.append(Spacer(1, 0.45 * cm))
+
+    # Metrics row
+    metrics_cells = [
+        Paragraph(f"Productos registrados<br/><b>{total_prods}</b>", mc_sty),
+        Paragraph(f"Categorias<br/><b>{total_cats}</b>", mc_sty),
+        Paragraph(f"Stock total<br/><b>{total_stock}</b>", mc_sty),
+        Paragraph(f"Precision promedio<br/><b>{avg_conf:.2f}%</b>", mc_sty),
+    ]
+    metrics_tbl = Table([metrics_cells], colWidths=[avail_w / 4] * 4)
+    metrics_tbl.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.HexColor("#FFF7E8")),
+        ("BOX",          (0, 0), (-1, -1), 1.5, ORANGE),
+        ("INNERGRID",    (0, 0), (-1, -1), 0.5, ORANGE),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
+    ]))
+    story.append(metrics_tbl)
+    story.append(Spacer(1, 0.6 * cm))
+
+    # Main inventory table
+    col_map = [
+        ("id",        "ID"),
+        ("code",      "Codigo"),
+        ("name",      "Nombre"),
+        ("category",  "Categoria"),
+        ("quantity",  "Cantidad"),
+        ("_conf_pct", "Confianza (%)"),
+        ("created_at","Fecha"),
+        ("status",    "Estado"),
+    ]
+    existing = [(src, lbl) for src, lbl in col_map if src in flt.columns]
+
+    table_data = [[Paragraph(lbl, hdr_sty) for _, lbl in existing]]
+    for _, row in flt.reset_index(drop=True).iterrows():
+        row_cells = []
+        for src, _ in existing:
+            v = row.get(src, "")
+            if src == "category":
+                v = CATEGORY_LABELS.get(str(v), str(v))
+            elif src == "_conf_pct":
+                try:
+                    v = f"{float(v):.2f}%"
+                except (TypeError, ValueError):
+                    pass
+            elif src == "created_at":
+                v = str(v).replace("T", " ").split(".")[0]
+            row_cells.append(Paragraph(str(v), cell_sty))
+        table_data.append(row_cells)
+
+    width_map = {
+        "id": 0.5, "code": 1.2, "name": 2.0, "category": 1.8,
+        "quantity": 0.8, "_conf_pct": 1.2, "created_at": 1.8, "status": 0.9,
+    }
+    raw_w = [width_map.get(src, 1.0) for src, _ in existing]
+    col_widths_pdf = [avail_w * w / sum(raw_w) for w in raw_w]
+
+    main_tbl = Table(table_data, colWidths=col_widths_pdf, repeatRows=1)
+    main_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0),  ORANGE),
+        ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+        ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+        ("FONTSIZE",      (0, 0), (-1, 0),  8),
+        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",          (0, 0), (-1, -1), 0.4, colors.HexColor("#D0D0D0")),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, LIGHT_GRAY]),
+    ]))
+    story.append(main_tbl)
+
+    doc.build(story, canvasmaker=_NumberedCanvas)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# ── Per-category badge colors ─────────────────────────────────────────────────
+_CAT_CHIP_COLORS: dict[str, tuple[str, str]] = {
+    "arroz_y_granos":       ("#fff7e8", "#d97706"),
+    "pastas":               ("#eaf3ff", "#2563eb"),
+    "aceites":              ("#ecfdf3", "#16a34a"),
+    "salsas_y_condimentos": ("#fdf2f8", "#9333ea"),
+    "cafe_chocolate":       ("#fff1ef", "#dc2626"),
+    "enlatados":            ("#f0f9ff", "#0284c7"),
+    "azucar_sal":           ("#fdf4ff", "#7c3aed"),
+}
+
+_SHARED_CSS = """
+<style>
+.inv-metric-card{background:#fff;border:1px solid var(--panel-border);border-radius:8px;
+  padding:1rem .9rem;display:flex;align-items:center;justify-content:space-between;min-height:80px}
+.inv-metric-label{color:var(--muted);font-size:.78rem;font-weight:700;margin-bottom:.25rem}
+.inv-metric-value{color:var(--ink);font-size:1.35rem;font-weight:800}
+.inv-metric-icon{width:40px;height:40px;background:#fff7e8;color:#f59e0b;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;font-size:1.15rem;flex:0 0 auto}
+.cat-badge{border-radius:999px;display:inline-flex;align-items:center;
+  font-size:.75rem;font-weight:800;padding:.2rem .65rem;white-space:nowrap}
+.conf-bar-wrap{display:flex;align-items:center;gap:.45rem}
+.conf-bar-track{background:#e8edf5;border-radius:999px;height:8px;flex:1;min-width:55px;overflow:hidden}
+.conf-bar-fill{background:linear-gradient(90deg,#22c55e,#86efac);border-radius:inherit;height:100%}
+.conf-value{font-size:.8rem;font-weight:800;color:var(--ink);min-width:44px;text-align:right}
+.inv-status-ok{background:#ecfdf3;color:#15803d;border-radius:999px;
+  display:inline-flex;align-items:center;gap:.3rem;font-size:.75rem;font-weight:800;padding:.2rem .65rem}
+.inv-table{width:100%;border-collapse:collapse;font-size:.875rem}
+.inv-table th{background:#f8fafc;color:#526079;font-size:.75rem;font-weight:800;
+  padding:.6rem .75rem;text-align:left;border-bottom:1px solid var(--panel-border)}
+.inv-table td{padding:.6rem .75rem;border-bottom:1px solid #f0f4fa;color:var(--ink);vertical-align:middle}
+.inv-table tr:last-child td{border-bottom:0}
+.inv-table tr:hover td{background:#f8fafc}
+.inv-banner{background:linear-gradient(90deg,#eff7ff,#f7fbff);border:1px solid #bfdbfe;
+  border-radius:8px;padding:1.25rem 1.5rem;display:flex;align-items:center;
+  justify-content:space-between;margin-top:1.25rem;gap:1rem}
+.inv-banner-title{color:var(--ink);font-weight:800;font-size:1rem;margin-bottom:.3rem}
+.inv-banner-copy{color:var(--muted);font-size:.88rem}
+.inv-banner-icon{font-size:3rem;opacity:.22;flex:0 0 auto}
+.mdl-subtitle{color:var(--muted);font-size:.95rem;margin:-.5rem 0 1.25rem}
+.mdl-status-ok{color:#15803d;font-weight:800}
+.mdl-status-err{color:#dc2626;font-weight:800}
+.mdl-detail-row{display:flex;align-items:flex-start;gap:.65rem;padding:.5rem 0;
+  border-bottom:1px solid #f0f4fa;font-size:.88rem}
+.mdl-detail-row:last-child{border-bottom:0}
+.mdl-detail-icon{flex:0 0 auto;width:24px;height:24px;background:#fff7e8;color:#f59e0b;
+  border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:.82rem}
+.mdl-detail-label{color:var(--muted);font-weight:700;min-width:130px;flex:0 0 auto}
+.mdl-detail-value{color:var(--ink);font-weight:700}
+.mdl-file-row{display:flex;align-items:center;gap:.65rem;padding:.5rem 0;
+  border-bottom:1px solid #f0f4fa}
+.mdl-file-row:last-child{border-bottom:0}
+.mdl-file-icon{flex:0 0 auto;width:28px;height:28px;background:#eaf3ff;color:#2563eb;
+  border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem}
+.mdl-file-path{color:var(--ink);font-weight:700;font-family:monospace;font-size:.83rem;
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+"""
+
+
+def _metric_card(label: str, value: str, icon: str, value_html: str = "") -> str:
+    val_part = value_html if value_html else escape(value)
+    return (
+        f'<div class="inv-metric-card">'
+        f'<div><div class="inv-metric-label">{escape(label)}</div>'
+        f'<div class="inv-metric-value">{val_part}</div></div>'
+        f'<div class="inv-metric-icon">{icon}</div>'
+        f'</div>'
+    )
+
+
+def _cat_badge(cat_key: str, label: str) -> str:
+    bg, fg = _CAT_CHIP_COLORS.get(cat_key, ("#f3f6fb", "#526079"))
+    return (
+        f'<span class="cat-badge" style="background:{bg};color:{fg}">'
+        f'{escape(label)}</span>'
+    )
+
+
+def _conf_bar(pct: float) -> str:
+    pct = min(max(pct, 0.0), 100.0)
+    return (
+        f'<div class="conf-bar-wrap">'
+        f'<div class="conf-bar-track">'
+        f'<div class="conf-bar-fill" style="width:{pct:.1f}%"></div>'
+        f'</div>'
+        f'<span class="conf-value">{pct:.2f}%</span>'
+        f'</div>'
+    )
+
+
+def render_inventory_tab() -> None:
+    st.markdown(_SHARED_CSS, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="panel-title">'
+        '<span>▣</span><span>Inventario registrado</span>'
+        '<span style="font-size:.9rem;margin-left:.5rem;color:var(--muted)">⌗</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    products = get_products()
+
+    if not products:
+        st.info("Todavía no hay productos registrados.")
+        return
+
+    df = pd.DataFrame(products)
+
+    if "confidence" in df.columns:
+        df["_conf_pct"] = (df["confidence"].clip(0, 1) * 100).round(2)
+    else:
+        df["_conf_pct"] = 0.0
+
+    # ── Metrics ───────────────────────────────────────────────────────────
+    total_prods = len(df)
+    total_cats  = df["category"].nunique() if "category" in df.columns else 0
+    total_stock = int(df["quantity"].sum()) if "quantity" in df.columns else 0
+    avg_conf    = float(df["_conf_pct"].mean())
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    for col, lbl, val, icon in [
+        (mc1, "Productos registrados", str(total_prods),   "▣"),
+        (mc2, "Categorías",            str(total_cats),    "◈"),
+        (mc3, "Stock total",           str(total_stock),   "▤"),
+        (mc4, "Precisión promedio",    f"{avg_conf:.2f}%", "◎"),
+    ]:
+        with col:
+            st.markdown(_metric_card(lbl, val, icon), unsafe_allow_html=True)
+
+    st.markdown("<div style='height:.75rem'></div>", unsafe_allow_html=True)
+
+    # ── Filters ───────────────────────────────────────────────────────────
+    cats_list   = sorted(df["category"].unique().tolist()) if "category" in df.columns else []
+    status_list = sorted(df["status"].unique().tolist())   if "status"   in df.columns else []
+    cat_labels  = ["Todas las categorías"] + [CATEGORY_LABELS.get(c, c) for c in cats_list]
+    status_opts = ["Todos los estados"] + status_list
+
+    f1, f2, f3 = st.columns([2.5, 1.6, 1.6])
+    with f1:
+        search = st.text_input(
+            "search_inv",
+            placeholder="⌕  Buscar por nombre o código...",
+            label_visibility="collapsed",
+        )
+    with f2:
+        cat_sel = st.selectbox("cat_inv", cat_labels, label_visibility="collapsed")
+    with f3:
+        status_sel = st.selectbox("status_inv", status_opts, label_visibility="collapsed")
+
+    # ── Apply filters ─────────────────────────────────────────────────────
+    flt = df.copy()
+    if search:
+        mask = pd.Series(False, index=flt.index)
+        for col in ("name", "code"):
+            if col in flt.columns:
+                mask |= flt[col].astype(str).str.contains(search, case=False, na=False)
+        flt = flt[mask]
+    if cat_sel != "Todas las categorías":
+        inv_map = {v: k for k, v in CATEGORY_LABELS.items()}
+        cat_key = inv_map.get(cat_sel, cat_sel)
+        if "category" in flt.columns:
+            flt = flt[flt["category"] == cat_key]
+    if status_sel != "Todos los estados" and "status" in flt.columns:
+        flt = flt[flt["status"] == status_sel]
+
+    # ── Action buttons ────────────────────────────────────────────────────
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    b1, b2, b3, _sp = st.columns([1.5, 1.4, 1.3, 2.8])
+    with b1:
+        if st.button("↻  Actualizar inventario", type="primary", use_container_width=True):
+            st.rerun()
+    with b2:
+        st.download_button(
+            "⬇  Exportar Excel",
+            data=_build_inventory_xlsx(flt),
+            file_name=f"inventario_{_ts}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="btn_inv_xlsx",
+        )
+    with b3:
+        st.download_button(
+            "⬇  Exportar PDF",
+            data=_build_inventory_pdf(flt, total_prods, total_cats, total_stock, avg_conf),
+            file_name=f"reporte_inventario_{_ts}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="btn_inv_pdf",
+        )
+
+    # ── Table ──────────────────────────────────────────────────────────────
+    display_cols = ["id", "code", "name", "category", "quantity", "_conf_pct", "created_at", "status"]
+    col_labels   = {
+        "id": "#", "code": "Código", "name": "Nombre", "category": "Categoría",
+        "quantity": "Cantidad", "_conf_pct": "Confianza", "created_at": "Fecha", "status": "Estado",
+    }
+    visible = [c for c in display_cols if c in flt.columns]
+
+    thead = "".join(f'<th>{escape(col_labels.get(c, c))}</th>' for c in visible)
+    tbody = ""
+    for row_i, row in flt.reset_index(drop=True).iterrows():
+        cells = ""
+        for col in visible:
+            v = row.get(col, "")
+            if col == "category":
+                k = str(v)
+                cells += f"<td>{_cat_badge(k, CATEGORY_LABELS.get(k, k))}</td>"
+            elif col == "_conf_pct":
+                try:
+                    cells += f"<td>{_conf_bar(float(v))}</td>"
+                except (TypeError, ValueError):
+                    cells += f"<td>{escape(str(v))}</td>"
+            elif col == "status":
+                cells += f'<td><span class="inv-status-ok">● {escape(str(v))}</span></td>'
+            elif col == "id":
+                cells += f"<td>{row_i}</td>"
+            else:
+                cells += f"<td>{escape(str(v))}</td>"
+        tbody += f"<tr>{cells}</tr>"
+
+    if not tbody:
+        tbody = (
+            f'<tr><td colspan="{len(visible)}" '
+            f'style="text-align:center;color:var(--muted);padding:2rem">'
+            f'Sin resultados para los filtros aplicados.</td></tr>'
+        )
+
+    st.markdown(
+        f'<div style="overflow-x:auto;margin-top:.75rem;border:1px solid var(--panel-border);'
+        f'border-radius:8px;overflow:hidden">'
+        f'<table class="inv-table"><thead><tr>{thead}</tr></thead>'
+        f'<tbody>{tbody}</tbody></table></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Bottom banner ──────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="inv-banner">'
+        '<div>'
+        '<div class="inv-banner-title">Gestiona y revisa tu inventario</div>'
+        '<div class="inv-banner-copy">Aquí puedes consultar los productos detectados, '
+        'revisar su información y mantener tu inventario actualizado.</div>'
+        '</div>'
+        '<div class="inv-banner-icon">▣▣▣</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_model_tab() -> None:
+    report_path = Path("trained_models/training_report.json")
+    report_ok   = report_path.exists()
+
+    st.markdown(_SHARED_CSS, unsafe_allow_html=True)
+
+    # ── Title + subtitle ──────────────────────────────────────────────────
+    st.markdown(
+        '<div class="panel-title"><span>ⓘ</span><span>Información del modelo</span></div>'
+        '<div class="mdl-subtitle">Arquitectura, categorías y archivos del modelo de clasificación.</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── 4 metric cards ─────────────────────────────────────────────────────
+    status_html = (
+        '<span class="mdl-status-ok">● Disponible</span>'
+        if report_ok
+        else '<span class="mdl-status-err">● No disponible</span>'
+    )
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    for col, lbl, val, icon in [
+        (mc1, "Arquitectura",       "MobileNetV2",  "◎"),
+        (mc2, "Categorías",         "7",            "◈"),
+        (mc3, "Formato del modelo", "Keras / ONNX", "▤"),
+    ]:
+        with col:
+            st.markdown(_metric_card(lbl, val, icon), unsafe_allow_html=True)
+    with mc4:
+        st.markdown(
+            _metric_card("Estado del reporte", "", "▣", value_html=status_html),
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    # ── Two columns ────────────────────────────────────────────────────────
+    left_col, right_col = st.columns([1, 1.25], gap="medium")
+
+    with left_col:
+        with st.container(border=True):
+            render_small_panel_title("Categorías del modelo", "◈")
+
+            cat_rows = ""
+            for key, label in CATEGORY_LABELS.items():
+                cat_rows += (
+                    f"<tr>"
+                    f"<td style='padding:.55rem .75rem;border-bottom:1px solid #f0f4fa;"
+                    f"color:var(--muted);font-size:.84rem;font-weight:700'>{escape(key)}</td>"
+                    f"<td style='padding:.55rem .75rem;border-bottom:1px solid #f0f4fa'>"
+                    f"{_cat_badge(key, label)}</td>"
+                    f"</tr>"
+                )
+
+            st.markdown(
+                '<table style="width:100%;border-collapse:collapse">'
+                '<thead><tr>'
+                '<th style="background:#f8fafc;color:#526079;font-size:.75rem;font-weight:800;'
+                'padding:.6rem .75rem;text-align:left;border-bottom:1px solid var(--panel-border)">'
+                'Categoría técnica</th>'
+                '<th style="background:#f8fafc;color:#526079;font-size:.75rem;font-weight:800;'
+                'padding:.6rem .75rem;text-align:left;border-bottom:1px solid var(--panel-border)">'
+                'Nombre visible</th>'
+                f'</tr></thead><tbody>{cat_rows}</tbody></table>',
+                unsafe_allow_html=True,
+            )
+
+    with right_col:
+        with st.container(border=True):
+            render_small_panel_title("Resumen técnico", "⚙")
+
+            details = [
+                ("◎", "Base del entrenamiento", "Transfer Learning"),
+                ("▣", "Backbone",               "MobileNetV2"),
+                ("◎", "Objetivo",               "Clasificación de productos de despensa"),
+                ("▤", "Salida",                 "Categoría predicha y confianza"),
+            ]
+            detail_rows = "".join(
+                f'<div class="mdl-detail-row">'
+                f'<span class="mdl-detail-icon">{icon}</span>'
+                f'<span class="mdl-detail-label">{escape(lbl)}</span>'
+                f'<span class="mdl-detail-value">{escape(val)}</span>'
+                f'</div>'
+                for icon, lbl, val in details
+            )
+            st.markdown(
+                f'<div style="background:#fff;border:1px solid var(--panel-border);'
+                f'border-radius:8px;padding:.75rem 1rem">{detail_rows}</div>',
+                unsafe_allow_html=True,
+            )
+
+            with st.expander("Ver detalles del modelo →"):
+                if report_ok:
+                    try:
+                        report = json.loads(report_path.read_text(encoding="utf-8"))
+                        st.json(report)
+                    except Exception:
+                        st.caption("No se pudo leer el reporte.")
+                else:
+                    st.caption("No se encontró training_report.json.")
+
+        st.markdown("<div style='height:.65rem'></div>", unsafe_allow_html=True)
+
+        model_files = [
+            "trained_models/product_classifier.keras",
+            "trained_models/training_report.json",
+            "trained_models/accuracy_loss.png",
+            "trained_models/confusion_matrix.png",
+        ]
+
+        with st.container(border=True):
+            render_small_panel_title("Archivos principales del modelo", "▤")
+
+            file_rows = "".join(
+                f'<div class="mdl-file-row">'
+                f'<span class="mdl-file-icon">▢</span>'
+                f'<span class="mdl-file-path">{escape(fp)}</span>'
+                f'</div>'
+                for fp in model_files
+            )
+            st.markdown(
+                f'<div style="background:#fff;border:1px solid var(--panel-border);'
+                f'border-radius:8px;padding:.75rem 1rem;margin-bottom:.5rem">{file_rows}</div>',
+                unsafe_allow_html=True,
+            )
+            st.code("\n".join(model_files), language=None)
+
+    # ── Bottom banner ──────────────────────────────────────────────────────
+    if report_ok:
+        b_title = "Reporte de entrenamiento encontrado."
+        b_copy  = ("Gráficas y métricas de entrenamiento disponibles para consulta "
+                   "en la sección de detalles del modelo.")
+    else:
+        b_title = "Reporte de entrenamiento no encontrado."
+        b_copy  = ("Ejecuta el entrenamiento del modelo para generar el reporte "
+                   "con métricas y gráficas.")
+
+    st.markdown(
+        f'<div class="inv-banner">'
+        f'<div>'
+        f'<div class="inv-banner-title">{escape(b_title)}</div>'
+        f'<div class="inv-banner-copy">{escape(b_copy)}</div>'
+        f'</div>'
+        f'<div class="inv-banner-icon">▲▤</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Inventario Inteligente",
@@ -370,67 +1089,77 @@ def main() -> None:
 
                 if prediction_response and uploaded_file is not None:
                     prediction = prediction_response["prediction"]
-                    generated_code = prediction_response["generated_code"]
+                    is_classifiable = prediction.get("is_classifiable", True)
 
-                    st.markdown('<div class="confirm-grid"></div>', unsafe_allow_html=True)
-                    render_small_panel_title("Confirmar registro", "✓")
+                    if not is_classifiable:
+                        st.warning(
+                            "⚠️ No fue posible clasificar esta imagen. Verifica que muestre "
+                            "claramente un producto de despensa (aceite, arroz, pasta, "
+                            "enlatado, café, etc.). Intenta con otra imagen."
+                        )
+                        st.session_state.prediction_response = None
+                    else:
+                        generated_code = prediction_response["generated_code"]
 
-                    suggested_name = (
-                        Path(uploaded_file.name).stem
-                        if uploaded_file.name
-                        else "producto_capturado"
-                    )
+                        st.markdown('<div class="confirm-grid"></div>', unsafe_allow_html=True)
+                        render_small_panel_title("Confirmar registro", "✓")
 
-                    product_name = st.text_input(
-                        "Nombre del producto",
-                        value=suggested_name,
-                    )
-
-                    quantity_col, category_col = st.columns([0.7, 1.3])
-
-                    with quantity_col:
-                        quantity = st.number_input(
-                            "Cantidad",
-                            min_value=1,
-                            value=1,
-                            step=1,
+                        suggested_name = (
+                            Path(uploaded_file.name).stem
+                            if uploaded_file.name
+                            else "producto_capturado"
                         )
 
-                    predicted_category = prediction["predicted_category"]
-                    category_options = list(CATEGORY_LABELS.keys())
-
-                    with category_col:
-                        selected_category = st.selectbox(
-                            "Categoria",
-                            options=category_options,
-                            index=category_options.index(predicted_category)
-                            if predicted_category in category_options
-                            else 0,
-                            format_func=format_category,
+                        product_name = st.text_input(
+                            "Nombre del producto",
+                            value=suggested_name,
                         )
 
-                    confidence = float(prediction["confidence"])
+                        quantity_col, category_col = st.columns([0.7, 1.3])
 
-                    if st.button(
-                        "Guardar en inventario",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        payload = {
-                            "code": generated_code,
-                            "name": product_name,
-                            "category": selected_category,
-                            "quantity": int(quantity),
-                            "image_path": uploaded_file.name or "captura_camara.jpg",
-                            "confidence": confidence,
-                        }
+                        with quantity_col:
+                            quantity = st.number_input(
+                                "Cantidad",
+                                min_value=1,
+                                value=1,
+                                step=1,
+                            )
 
-                        result = register_product(payload)
+                        predicted_category = prediction["predicted_category"]
+                        category_options = list(CATEGORY_LABELS.keys())
 
-                        if result:
-                            st.success("Producto registrado correctamente.")
-                            st.json(result)
-                            st.session_state.prediction_response = None
+                        with category_col:
+                            selected_category = st.selectbox(
+                                "Categoria",
+                                options=category_options,
+                                index=category_options.index(predicted_category)
+                                if predicted_category in category_options
+                                else 0,
+                                format_func=format_category,
+                            )
+
+                        confidence = float(prediction["confidence"])
+
+                        if st.button(
+                            "Guardar en inventario",
+                            type="primary",
+                            use_container_width=True,
+                        ):
+                            payload = {
+                                "code": generated_code,
+                                "name": product_name,
+                                "category": selected_category,
+                                "quantity": int(quantity),
+                                "image_path": uploaded_file.name or "captura_camara.jpg",
+                                "confidence": confidence,
+                            }
+
+                            result = register_product(payload)
+
+                            if result:
+                                st.success("Producto registrado correctamente.")
+                                st.json(result)
+                                st.session_state.prediction_response = None
 
         with right_col:
             with st.container(border=True):
@@ -449,15 +1178,18 @@ def main() -> None:
                         render_empty_preview()
 
                 with result_col:
-                    render_result_cards(
-                        st.session_state.get("prediction_response"),
-                        format_category,
+                    _pred_resp = st.session_state.get("prediction_response")
+                    _visible_pred = (
+                        _pred_resp
+                        if (
+                            _pred_resp is None
+                            or _pred_resp.get("prediction", {}).get("is_classifiable", True)
+                        )
+                        else None
                     )
+                    render_result_cards(_visible_pred, format_category)
 
-                render_result_details(
-                    st.session_state.get("prediction_response"),
-                    format_category,
-                )
+                render_result_details(_visible_pred, format_category)
 
         if uploaded_file is None:
             render_info_strip(
@@ -586,6 +1318,9 @@ def main() -> None:
                     error_results = [r for r in results if "error" in r]
 
                     if ok_results:
+                        classifiable = [r for r in ok_results if r.get("is_classifiable", True)]
+                        not_classif  = [r for r in ok_results if not r.get("is_classifiable", True)]
+
                         render_small_panel_title("Resultados de clasificacion", "✓")
 
                         table_data = [
@@ -593,6 +1328,7 @@ def main() -> None:
                                 "Archivo": r["filename"],
                                 "Categoria": format_category(r["predicted_category"]),
                                 "Confianza (%)": round(r["confidence_percent"], 2),
+                                "Estado": "✓ Clasificado" if r.get("is_classifiable", True) else "⚠ No clasificable",
                             }
                             for r in ok_results
                         ]
@@ -602,13 +1338,13 @@ def main() -> None:
                         export_col, save_col = st.columns(2)
 
                         with export_col:
-                            csv_bytes = df_results.to_csv(index=False).encode("utf-8")
+                            _batch_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                             st.download_button(
-                                "Exportar resultados",
-                                data=csv_bytes,
-                                file_name="resultados_clasificacion.csv",
-                                mime="text/csv",
-                                key="btn_export_csv",
+                                "⬇  Exportar Excel",
+                                data=_build_batch_xlsx(ok_results),
+                                file_name=f"clasificacion_masiva_{_batch_ts}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key="btn_export_xlsx",
                                 use_container_width=True,
                             )
 
@@ -621,42 +1357,52 @@ def main() -> None:
                             )
 
                         if save_clicked:
-                            progress = st.progress(0)
-                            saved = 0
-                            failed = 0
-                            total = len(ok_results)
-
-                            for i, result in enumerate(ok_results):
-                                payload = {
-                                    "code": result["generated_code"],
-                                    "name": Path(result["filename"]).stem,
-                                    "category": result["predicted_category"],
-                                    "quantity": 1,
-                                    "image_path": result["filename"],
-                                    "confidence": result["confidence"],
-                                }
-                                try:
-                                    resp = requests.post(
-                                        f"{API_BASE_URL}/products",
-                                        json=payload,
-                                        timeout=30,
-                                    )
-                                    if resp.status_code in (200, 201):
-                                        saved += 1
-                                    else:
-                                        failed += 1
-                                except requests.RequestException:
-                                    failed += 1
-
-                                progress.progress((i + 1) / total)
-
-                            if saved > 0:
-                                st.success(f"{saved} producto(s) guardado(s) en inventario.")
-                            if failed > 0:
+                            to_save = classifiable
+                            skipped_conf = len(not_classif)
+                            if not to_save:
                                 st.warning(
-                                    f"{failed} producto(s) no se pudieron guardar "
-                                    "(puede que el codigo ya exista en la BD)."
+                                    f"No hay imágenes clasificables para guardar. "
+                                    f"Omitidas por baja confianza: {skipped_conf}"
                                 )
+                            else:
+                                progress = st.progress(0)
+                                saved = 0
+                                failed = 0
+                                total = len(to_save)
+
+                                for i, result in enumerate(to_save):
+                                    payload = {
+                                        "code": result["generated_code"],
+                                        "name": Path(result["filename"]).stem,
+                                        "category": result["predicted_category"],
+                                        "quantity": 1,
+                                        "image_path": result["filename"],
+                                        "confidence": result["confidence"],
+                                    }
+                                    try:
+                                        resp = requests.post(
+                                            f"{API_BASE_URL}/products",
+                                            json=payload,
+                                            timeout=30,
+                                        )
+                                        if resp.status_code in (200, 201):
+                                            saved += 1
+                                        else:
+                                            failed += 1
+                                    except requests.RequestException:
+                                        failed += 1
+
+                                    progress.progress((i + 1) / total)
+
+                                summary = f"Guardados: {saved}"
+                                if skipped_conf > 0:
+                                    summary += f" | Omitidos por baja confianza: {skipped_conf}"
+                                st.success(summary)
+                                if failed > 0:
+                                    st.warning(
+                                        f"{failed} producto(s) no se pudieron guardar "
+                                        "(puede que el codigo ya exista en la BD)."
+                                    )
 
                     if error_results:
                         with st.expander(f"Imagenes con error ({len(error_results)})"):
@@ -690,50 +1436,10 @@ def main() -> None:
             )
 
     with tabs[2]:
-        render_inventory_table()
-
-        if st.button("Actualizar inventario"):
-            st.rerun()
+        render_inventory_tab()
 
     with tabs[3]:
-        st.header("Información del modelo")
-
-        st.write(
-            """
-            El modelo fue entrenado usando Transfer Learning con MobileNetV2
-            para clasificar productos de despensa en las siguientes categorías:
-            """
-        )
-
-        categories_df = pd.DataFrame(
-            [
-                {
-                    "Categoría técnica": key,
-                    "Nombre visible": value,
-                }
-                for key, value in CATEGORY_LABELS.items()
-            ]
-        )
-
-        st.dataframe(categories_df, use_container_width=True)
-
-        st.write("Archivos principales del modelo:")
-
-        st.code(
-            """
-trained_models/product_classifier.keras
-trained_models/training_report.json
-trained_models/accuracy_loss.png
-trained_models/confusion_matrix.png
-            """.strip()
-        )
-
-        report_path = Path("trained_models/training_report.json")
-
-        if report_path.exists():
-            st.success("Reporte de entrenamiento encontrado.")
-        else:
-            st.warning("No se encontró training_report.json.")
+        render_model_tab()
 
 
 if __name__ == "__main__":

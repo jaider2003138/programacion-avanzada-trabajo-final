@@ -36,6 +36,8 @@ El usuario puede:
 | Inferencia del modelo | ONNX Runtime |
 | Base de datos | PostgreSQL (Supabase) |
 | Procesamiento de imágenes | Pillow + NumPy |
+| Exportación de reportes | openpyxl (Excel) + reportlab (PDF) |
+| Contenerización | Docker + Docker Compose |
 | Entrenamiento del modelo | TensorFlow / Keras + MobileNetV2 |
 | Exportación a ONNX | tf2onnx |
 | Preparación del dataset | Hugging Face Datasets |
@@ -155,6 +157,7 @@ DATABASE_URL=postgresql://usuario:contraseña@host:5432/postgres?sslmode=require
 - Git
 - Acceso a un proyecto de Supabase (para la base de datos PostgreSQL)
 - Visual Studio Code (recomendado) o cualquier editor
+- Docker y Docker Compose (solo para el modo contenedores — opcional)
 
 ---
 
@@ -390,22 +393,27 @@ La interfaz Streamlit tiene cuatro pestañas:
 1. Seleccionar método de entrada: **Subir imagen** o **Usar cámara**.
 2. Cargar o capturar la imagen del producto.
 3. Presionar **Clasificar producto**.
-4. Revisar categoría predicha, confianza y código generado.
-5. Ajustar nombre del producto, cantidad y categoría si es necesario.
-6. Presionar **Guardar en inventario**.
+4. Si el modelo no puede clasificar la imagen con suficiente confianza (< 70 %), se
+   muestra una advertencia y se solicita una nueva imagen.
+5. Revisar categoría predicha, confianza y código generado.
+6. Ajustar nombre del producto, cantidad y categoría si es necesario.
+7. Presionar **Guardar en inventario**.
 
 ### Pestaña 2 — Cargue masivo
 
 1. Elegir el modo: **Subir imágenes** (múltiples archivos) o **Subir ZIP**.
 2. Cargar los archivos (formatos válidos: `jpg`, `jpeg`, `png`, `webp`).
 3. Presionar **Clasificar todo** — el sistema procesa hasta 100 imágenes.
-4. Revisar la tabla de resultados con categoría y confianza por archivo.
-5. Descargar los resultados en CSV con **Exportar resultados a CSV**.
+4. Revisar la tabla de resultados con categoría, confianza y estado por archivo.
+   Las imágenes con confianza < 70 % se marcan como "No clasificable" y se omiten
+   al guardar.
+5. Descargar los resultados en Excel con **Exportar resultados a Excel**.
 6. Guardar todos los productos válidos con **Guardar todo en inventario**.
 
 ### Pestaña 3 — Inventario
 
-Muestra todos los productos registrados. Incluye botón **Actualizar inventario**.
+Muestra todos los productos registrados. Permite exportar el inventario completo
+en formato **Excel** o **PDF** y tiene botón **Actualizar inventario**.
 
 ### Pestaña 4 — Acerca del modelo
 
@@ -591,9 +599,8 @@ Ejemplo: INV-CAF-202605-0001
 
 | Confianza | Interpretación |
 |-----------|---------------|
-| ≥ 80 % | Predicción confiable |
-| 50 % – 79 % | Confianza media — revisar antes de guardar |
-| < 50 % | Baja confianza — corregir manualmente |
+| ≥ 70 % | Predicción confiable — se acepta para guardar |
+| < 70 % | Confianza insuficiente — la imagen no se clasifica; debe reemplazarse |
 
 ---
 

@@ -18,6 +18,7 @@ LABELS_PATH = Path("datasets/processed/labels.json")
 
 IMAGE_SIZE = (224, 224)
 TOP_K = 3
+CONFIDENCE_THRESHOLD = 0.70
 
 
 _session: ort.InferenceSession | None = None
@@ -103,10 +104,19 @@ def predict_pil_image(image: Image.Image) -> dict[str, Any]:
         )
 
     best_index = int(top_indices[0])
+    best_confidence = float(predictions[best_index])
+    is_classifiable = best_confidence >= CONFIDENCE_THRESHOLD
 
     return {
         "predicted_category": class_names[best_index],
-        "confidence": float(predictions[best_index]),
-        "confidence_percent": float(predictions[best_index] * 100),
+        "confidence": best_confidence,
+        "confidence_percent": best_confidence * 100,
         "top_predictions": top_predictions,
+        "is_classifiable": is_classifiable,
+        "classification_warning": (
+            None if is_classifiable else
+            "No fue posible clasificar esta imagen con suficiente confianza. "
+            "Asegúrate de que la imagen muestre claramente un producto de "
+            "despensa (aceite, arroz, pasta, enlatado, etc.)"
+        ),
     }

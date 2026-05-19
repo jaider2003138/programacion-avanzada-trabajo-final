@@ -17,3 +17,5 @@ RUN python -m pip install --upgrade pip \
 COPY . .
 
 EXPOSE 5000 8501
+
+CMD ["python", "-m", "app.api.app"]

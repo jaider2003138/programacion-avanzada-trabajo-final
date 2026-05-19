@@ -203,6 +203,8 @@ def predict_batch():
                     "confidence_percent": prediction["confidence_percent"],
                     "top_predictions": prediction["top_predictions"],
                     "generated_code": generated_code,
+                    "is_classifiable": prediction.get("is_classifiable", True),
+                    "classification_warning": prediction.get("classification_warning"),
                 }
             )
         except Exception as exc:

@@ -1,10 +1,8 @@
-datasets
 pillow
 scikit-learn
 pandas
 tqdm
 onnxruntime
-tf2onnx
 matplotlib
 numpy
 flask
@@ -13,3 +11,10 @@ streamlit
 requests
 psycopg2-binary
 python-dotenv
+openpyxl
+reportlab
+
+# --- Solo para entrenamiento y exportación del modelo ---
+# tensorflow
+# tf2onnx
+# datasets

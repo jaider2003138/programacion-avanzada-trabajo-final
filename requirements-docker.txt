@@ -1,6 +1,9 @@
 pillow
+scikit-learn
 pandas
+tqdm
 onnxruntime
+matplotlib
 numpy
 flask
 flask-cors
@@ -8,3 +11,5 @@ streamlit
 requests
 psycopg2-binary
 python-dotenv
+openpyxl
+reportlab
