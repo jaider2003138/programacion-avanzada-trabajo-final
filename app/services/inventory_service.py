@@ -156,6 +156,71 @@ def register_product(
     }
 
 
+def update_product(
+    code: str,
+    *,
+    name: str | None = None,
+    category: str | None = None,
+    quantity: int | None = None,
+    image_path: str | None = None,
+    confidence: float | None = None,
+    status: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Actualiza campos permitidos de un producto por codigo.
+    """
+    initialize_database()
+
+    updates: dict[str, Any] = {}
+
+    if name is not None:
+        updates["name"] = name
+    if category is not None:
+        updates["category"] = category
+    if quantity is not None:
+        quantity_value = int(quantity)
+        if quantity_value < 0:
+            raise ValueError("La cantidad no puede ser negativa.")
+        updates["quantity"] = quantity_value
+    if image_path is not None:
+        updates["image_path"] = image_path
+    if confidence is not None:
+        updates["confidence"] = float(confidence)
+    if status is not None:
+        updates["status"] = status
+
+    if not updates:
+        return find_product_by_code(code)
+
+    assignments = ", ".join(f"{column} = %s" for column in updates)
+    values = [*updates.values(), code]
+
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            f"""
+            UPDATE products
+            SET {assignments}
+            WHERE code = %s
+            RETURNING
+                id,
+                code,
+                name,
+                category,
+                quantity,
+                image_path,
+                confidence,
+                created_at,
+                status
+            """,
+            values,
+        )
+
+        row = cursor.fetchone()
+
+    return dict(row) if row else None
+
+
 def list_products() -> list[dict[str, Any]]:
     """
     Lista todos los productos registrados.

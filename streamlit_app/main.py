@@ -25,6 +25,14 @@ import pandas as pd
 import requests
 import streamlit as st
 
+
+try:
+    from streamlit_app.auth.login import show_login_page
+    from streamlit_app.auth.register import show_register_page
+except ModuleNotFoundError:
+    from auth.login import show_login_page
+    from auth.register import show_register_page
+
 try:
     from streamlit_app.components import (
         render_app_header,
@@ -72,6 +80,92 @@ CATEGORY_LABELS = {
     "azucar_sal": "Azúcar y sal",
 }
 
+DEFAULT_USER_NAME = "Usuario local"
+DEFAULT_USER_EMAIL = "local@app.com"
+DEFAULT_USER_ROLE = "bodega"
+
+AUDIT_ACTION_LABELS = {
+    "producto_clasificado": "Producto clasificado",
+    "producto_agregado": "Producto agregado",
+    "producto_actualizado": "Producto actualizado",
+    "cargue_masivo_realizado": "Cargue masivo realizado",
+    "inventario_consultado": "Inventario consultado",
+    "producto_desactivado": "Producto desactivado",
+    "usuario_creado": "Usuario creado",
+    "usuario_actualizado": "Usuario actualizado",
+}
+
+
+def is_logged_in() -> bool:
+    """
+    Indica si hay un usuario autenticado en la sesion.
+    """
+    return bool(st.session_state.get("user_id"))
+
+
+def current_user_role() -> str:
+    """
+    Devuelve el rol del usuario autenticado.
+    """
+    return str(st.session_state.get("user_role") or DEFAULT_USER_ROLE)
+
+
+def get_current_user() -> dict[str, str]:
+    """
+    Devuelve el usuario actual para enviarlo a la API.
+    """
+    user_name = str(st.session_state.get("user_name") or "").strip()
+    user_email = str(st.session_state.get("user_email") or "").strip()
+    user_role = str(st.session_state.get("user_role") or "").strip()
+
+    return {
+        "user_id": str(st.session_state.get("user_id") or ""),
+        "user_name": user_name or DEFAULT_USER_NAME,
+        "user_email": user_email or DEFAULT_USER_EMAIL,
+        "user_role": user_role or DEFAULT_USER_ROLE,
+    }
+
+
+def set_logged_user(user: dict[str, Any]) -> None:
+    """
+    Guarda el usuario autenticado en session_state.
+    """
+    st.session_state["user_id"] = user["id"]
+    st.session_state["user_name"] = user["full_name"]
+    st.session_state["user_email"] = user["email"]
+    st.session_state["user_role"] = user["role"]
+
+
+def clear_logged_user() -> None:
+    """
+    Cierra la sesion local.
+    """
+    for key in ("user_id", "user_name", "user_email", "user_role"):
+        st.session_state.pop(key, None)
+
+
+def render_authenticated_sidebar() -> None:
+    """
+    Muestra informacion de sesion y cierre.
+    """
+    with st.sidebar:
+        st.markdown("### Sesion")
+        st.write(f"**{st.session_state.get('user_name', DEFAULT_USER_NAME)}**")
+        st.caption(st.session_state.get("user_email", DEFAULT_USER_EMAIL))
+        st.markdown(f"`{current_user_role()}`")
+        if st.button("Cerrar sesion", use_container_width=True):
+            clear_logged_user()
+            st.rerun()
+
+
+def format_audit_action(action: str | None) -> str:
+    """
+    Convierte la accion tecnica a una etiqueta legible.
+    """
+    if not action:
+        return "-"
+    return AUDIT_ACTION_LABELS.get(action, action.replace("_", " ").capitalize())
+
 
 def check_api_status() -> bool:
     """
@@ -100,6 +194,7 @@ def predict_image(uploaded_file) -> dict[str, Any] | None:
         response = requests.post(
             f"{API_BASE_URL}/predict",
             files=files,
+            data=get_current_user(),
             timeout=60,
         )
 
@@ -115,38 +210,56 @@ def predict_image(uploaded_file) -> dict[str, Any] | None:
         return None
 
 
-def register_product(payload: dict[str, Any]) -> dict[str, Any] | None:
+def register_product(
+    payload: dict[str, Any],
+    *,
+    show_errors: bool = True,
+) -> dict[str, Any] | None:
     """
     Envía un producto al endpoint /products.
     """
     try:
+        request_payload = {
+            **payload,
+            **get_current_user(),
+        }
         response = requests.post(
             f"{API_BASE_URL}/products",
-            json=payload,
+            json=request_payload,
             timeout=30,
         )
 
         if response.status_code not in [200, 201]:
-            st.error("Error al registrar el producto.")
-            try:
-                st.json(response.json())
-            except Exception:
-                st.write(response.text)
+            if show_errors:
+                st.error("Error al registrar el producto.")
+                try:
+                    st.json(response.json())
+                except Exception:
+                    st.write(response.text)
             return None
 
         return response.json()
 
     except requests.RequestException as exc:
-        st.error(f"No se pudo registrar el producto: {exc}")
+        if show_errors:
+            st.error(f"No se pudo registrar el producto: {exc}")
         return None
 
 
-def get_products() -> list[dict[str, Any]]:
+def get_products(*, audit: bool = False) -> list[dict[str, Any]]:
     """
     Consulta productos registrados.
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/products", timeout=10)
+        params = get_current_user()
+        if audit:
+            params["audit"] = "true"
+
+        response = requests.get(
+            f"{API_BASE_URL}/products",
+            params=params,
+            timeout=10,
+        )
 
         if response.status_code != 200:
             return []
@@ -156,6 +269,150 @@ def get_products() -> list[dict[str, Any]]:
 
     except requests.RequestException:
         return []
+
+
+def get_audit_logs(filters: dict[str, str]) -> list[dict[str, Any]]:
+    """
+    Consulta los registros de auditoria desde la API.
+
+    Reglas:
+    - Admin: puede ver todos los logs y aplicar filtros.
+    - Bodega: la API limita automaticamente la consulta a sus propios logs.
+    """
+    try:
+        params = {
+            key: value
+            for key, value in filters.items()
+            if value
+        }
+        params["limit"] = "200"
+
+        current_user = get_current_user()
+
+        headers = {
+            "X-User-Id": current_user["user_id"],
+            "X-User-Name": current_user["user_name"],
+            "X-User-Email": current_user["user_email"],
+            "X-User-Role": current_user["user_role"],
+        }
+
+        response = requests.get(
+            f"{API_BASE_URL}/audit/logs",
+            params=params,
+            headers=headers,
+            timeout=15,
+        )
+
+        if response.status_code != 200:
+            st.warning("No se pudieron consultar los logs de auditoria.")
+            try:
+                st.json(response.json())
+            except Exception:
+                st.write(response.text)
+            return []
+
+        return response.json().get("logs", [])
+
+    except requests.RequestException as exc:
+        st.warning(f"No se pudo conectar con la auditoria: {exc}")
+        return []
+
+
+def get_users() -> list[dict[str, Any]]:
+    """
+    Consulta usuarios registrados. Solo admin.
+    """
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/users",
+            params=get_current_user(),
+            timeout=15,
+        )
+
+        if response.status_code != 200:
+            st.warning("No se pudieron consultar los usuarios.")
+            return []
+
+        return response.json().get("users", [])
+
+    except requests.RequestException as exc:
+        st.warning(f"No se pudo conectar con usuarios: {exc}")
+        return []
+
+
+def create_app_user(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Crea usuario desde la API. Solo admin.
+    """
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/users",
+            json={**payload, **get_current_user()},
+            timeout=20,
+        )
+
+        if response.status_code not in (200, 201):
+            try:
+                st.error(response.json().get("detail") or response.json().get("error"))
+            except Exception:
+                st.error("No se pudo crear el usuario.")
+            return None
+
+        return response.json().get("user")
+
+    except requests.RequestException as exc:
+        st.error(f"No se pudo crear el usuario: {exc}")
+        return None
+
+
+def update_product_api(code: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Actualiza un producto. Solo admin.
+    """
+    try:
+        response = requests.patch(
+            f"{API_BASE_URL}/products/{code}",
+            json={**payload, **get_current_user()},
+            timeout=20,
+        )
+
+        if response.status_code != 200:
+            try:
+                st.error(response.json().get("detail") or response.json().get("error"))
+            except Exception:
+                st.error("No se pudo actualizar el producto.")
+            return None
+
+        return response.json().get("product")
+
+    except requests.RequestException as exc:
+        st.error(f"No se pudo actualizar el producto: {exc}")
+        return None
+
+
+def deactivate_product_api(code: str) -> dict[str, Any] | None:
+    """
+    Desactiva un producto. Solo admin.
+    """
+    try:
+        response = requests.delete(
+            f"{API_BASE_URL}/products/{code}",
+            json=get_current_user(),
+            timeout=20,
+        )
+
+        if response.status_code != 200:
+            try:
+                st.error(response.json().get("detail") or response.json().get("error"))
+            except Exception:
+                st.error("No se pudo desactivar el producto.")
+            return None
+
+        return response.json().get("product")
+
+    except requests.RequestException as exc:
+        st.error(f"No se pudo desactivar el producto: {exc}")
+        return None
 
 
 def format_category(category: str) -> str:
@@ -181,12 +438,14 @@ def predict_batch_files(
             response = requests.post(
                 f"{API_BASE_URL}/predict/batch",
                 files=files,
+                data=get_current_user(),
                 timeout=300,
             )
         else:
             response = requests.post(
                 f"{API_BASE_URL}/predict/batch",
                 files={"zip": (zip_data.name, zip_data.getvalue(), "application/zip")},
+                data=get_current_user(),
                 timeout=300,
             )
 
@@ -255,7 +514,10 @@ def render_inventory_table() -> None:
     """
     Muestra tabla de inventario.
     """
-    products = get_products()
+    audit_inventory_consult = bool(
+        st.session_state.pop("audit_inventory_consult", False)
+    )
+    products = get_products(audit=audit_inventory_consult)
 
     st.subheader("Inventario registrado")
 
@@ -711,7 +973,10 @@ def render_inventory_tab() -> None:
         unsafe_allow_html=True,
     )
 
-    products = get_products()
+    audit_inventory_consult = bool(
+        st.session_state.pop("audit_inventory_consult", False)
+    )
+    products = get_products(audit=audit_inventory_consult)
 
     if not products:
         st.info("Todavía no hay productos registrados.")
@@ -778,9 +1043,11 @@ def render_inventory_tab() -> None:
 
     # ── Action buttons ────────────────────────────────────────────────────
     _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    is_admin = current_user_role() == "admin"
     b1, b2, b3, _sp = st.columns([1.5, 1.4, 1.3, 2.8])
     with b1:
         if st.button("↻  Actualizar inventario", type="primary", use_container_width=True):
+            st.session_state["audit_inventory_consult"] = True
             st.rerun()
     with b2:
         st.download_button(
@@ -790,6 +1057,7 @@ def render_inventory_tab() -> None:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
             key="btn_inv_xlsx",
+            disabled=not is_admin,
         )
     with b3:
         st.download_button(
@@ -799,7 +1067,10 @@ def render_inventory_tab() -> None:
             mime="application/pdf",
             use_container_width=True,
             key="btn_inv_pdf",
+            disabled=not is_admin,
         )
+    if not is_admin:
+        st.caption("La exportacion de inventario esta disponible solo para admin.")
 
     # ── Table ──────────────────────────────────────────────────────────────
     display_cols = ["id", "code", "name", "category", "quantity", "_conf_pct", "created_at", "status"]
@@ -847,6 +1118,76 @@ def render_inventory_tab() -> None:
     )
 
     # ── Bottom banner ──────────────────────────────────────────────────────
+    if is_admin and not flt.empty and "code" in flt.columns:
+        with st.container(border=True):
+            render_small_panel_title("Administrar producto", "!")
+            selected_code = st.selectbox(
+                "Producto",
+                options=flt["code"].astype(str).tolist(),
+                key="admin_product_code",
+            )
+            selected_rows = df[df["code"].astype(str) == selected_code]
+            selected_row = selected_rows.iloc[0] if not selected_rows.empty else None
+
+            if selected_row is not None:
+                edit_col_1, edit_col_2, edit_col_3 = st.columns([1.4, 0.8, 1.1])
+                with edit_col_1:
+                    edit_name = st.text_input(
+                        "Nombre",
+                        value=str(selected_row.get("name", "")),
+                        key="admin_edit_name",
+                    )
+                with edit_col_2:
+                    edit_quantity = st.number_input(
+                        "Cantidad",
+                        min_value=0,
+                        value=int(selected_row.get("quantity", 0)),
+                        step=1,
+                        key="admin_edit_quantity",
+                    )
+                with edit_col_3:
+                    category_options = list(CATEGORY_LABELS.keys())
+                    current_category = str(selected_row.get("category", category_options[0]))
+                    edit_category = st.selectbox(
+                        "Categoria",
+                        options=category_options,
+                        index=category_options.index(current_category)
+                        if current_category in category_options
+                        else 0,
+                        format_func=format_category,
+                        key="admin_edit_category",
+                    )
+
+                save_col, deactivate_col = st.columns(2)
+                with save_col:
+                    if st.button(
+                        "Actualizar producto",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        updated = update_product_api(
+                            selected_code,
+                            {
+                                "name": edit_name,
+                                "quantity": int(edit_quantity),
+                                "category": edit_category,
+                                "audit_details": "Actualizacion desde Streamlit.",
+                            },
+                        )
+                        if updated:
+                            st.success("Producto actualizado.")
+                            st.rerun()
+
+                with deactivate_col:
+                    if st.button(
+                        "Desactivar producto",
+                        use_container_width=True,
+                    ):
+                        deactivated = deactivate_product_api(selected_code)
+                        if deactivated:
+                            st.success("Producto desactivado.")
+                            st.rerun()
+
     st.markdown(
         '<div class="inv-banner">'
         '<div>'
@@ -858,6 +1199,256 @@ def render_inventory_tab() -> None:
         '</div>',
         unsafe_allow_html=True,
     )
+
+
+def _format_audit_confidence(value: Any) -> str:
+    if value in (None, ""):
+        return "-"
+
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+    if confidence <= 1:
+        confidence *= 100
+
+    return f"{confidence:.2f}%"
+
+
+def _format_audit_details(value: Any) -> str:
+    if value in (None, ""):
+        return "-"
+
+    if not isinstance(value, str):
+        return str(value)
+
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+    if isinstance(parsed, dict):
+        return "; ".join(
+            f"{key}: {parsed_value}"
+            for key, parsed_value in parsed.items()
+            if parsed_value not in (None, "")
+        ) or "-"
+
+    return str(parsed)
+
+
+def render_logs_tab() -> None:
+    """
+    Muestra el historial de auditoria del inventario.
+    """
+    st.markdown(_SHARED_CSS, unsafe_allow_html=True)
+    render_panel_title("Historial de actividad", "☷")
+    st.caption(
+        "Consulta las acciones realizadas sobre el inventario y los productos clasificados."
+    )
+
+    with st.container(border=True):
+        render_small_panel_title("Filtros", "⌕")
+
+        action_labels = ["Todas las acciones", *AUDIT_ACTION_LABELS.values()]
+        label_to_action = {
+            label: action
+            for action, label in AUDIT_ACTION_LABELS.items()
+        }
+
+        filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(
+            [1.4, 1.4, 1.2, 1.0],
+            gap="medium",
+        )
+
+        with filter_col_1:
+            selected_action_label = st.selectbox(
+                "Filtro por accion",
+                action_labels,
+                key="audit_action_filter",
+            )
+
+        with filter_col_2:
+            user_filter = st.text_input(
+                "Filtro por usuario/correo",
+                placeholder="Nombre o correo",
+                key="audit_user_filter",
+            )
+
+        with filter_col_3:
+            product_code_filter = st.text_input(
+                "Filtro por codigo de producto",
+                placeholder="INV-...",
+                key="audit_product_code_filter",
+            )
+
+        with filter_col_4:
+            refresh_clicked = st.button(
+                "Actualizar logs",
+                type="primary",
+                use_container_width=True,
+            )
+
+    if refresh_clicked:
+        st.session_state["audit_logs_refreshed_at"] = datetime.now().isoformat()
+
+    filters: dict[str, str] = {}
+    selected_action = label_to_action.get(selected_action_label)
+    if selected_action:
+        filters["action"] = selected_action
+
+    cleaned_user_filter = user_filter.strip()
+    if cleaned_user_filter:
+        if "@" in cleaned_user_filter:
+            filters["user_email"] = cleaned_user_filter
+        else:
+            filters["user_name"] = cleaned_user_filter
+
+    cleaned_product_code = product_code_filter.strip()
+    if cleaned_product_code:
+        filters["product_code"] = cleaned_product_code
+
+    logs = get_audit_logs(filters)
+
+    total_logs = len(logs)
+    total_users = len(
+        {
+            log.get("user_email") or log.get("user_name")
+            for log in logs
+            if log.get("user_email") or log.get("user_name")
+        }
+    )
+    total_actions = len(
+        {
+            log.get("action")
+            for log in logs
+            if log.get("action")
+        }
+    )
+
+    metric_col_1, metric_col_2, metric_col_3 = st.columns(3)
+    with metric_col_1:
+        st.markdown(
+            _metric_card("Registros encontrados", str(total_logs), "☷"),
+            unsafe_allow_html=True,
+        )
+    with metric_col_2:
+        st.markdown(
+            _metric_card("Usuarios", str(total_users), "◉"),
+            unsafe_allow_html=True,
+        )
+    with metric_col_3:
+        st.markdown(
+            _metric_card("Tipos de accion", str(total_actions), "↻"),
+            unsafe_allow_html=True,
+        )
+
+    if not logs:
+        st.info("No hay logs para los filtros seleccionados.")
+        return
+
+    rows = []
+    for log in logs:
+        created_at = str(log.get("created_at") or "")
+        created_at = created_at.replace("T", " ").split(".")[0]
+
+        rows.append(
+            {
+                "Fecha": created_at,
+                "Usuario": log.get("user_name") or "-",
+                "Correo": log.get("user_email") or "-",
+                "Rol": log.get("user_role") or "-",
+                "Accion": format_audit_action(log.get("action")),
+                "Codigo producto": log.get("product_code") or "-",
+                "Producto": log.get("product_name") or "-",
+                "Categoria": format_category(log.get("category") or "-"),
+                "Cantidad": log.get("quantity") if log.get("quantity") is not None else "-",
+                "Confianza": _format_audit_confidence(log.get("confidence")),
+                "Detalles": _format_audit_details(log.get("details")),
+            }
+        )
+
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown(
+        '<div class="inv-banner">'
+        '<div>'
+        '<div class="inv-banner-title">Trazabilidad del inventario</div>'
+        '<div class="inv-banner-copy">Cada registro conserva usuario, accion, producto, '
+        'fecha y detalles operativos de la actividad.</div>'
+        '</div>'
+        '<div class="inv-banner-icon">☷</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_users_tab() -> None:
+    """
+    Administra usuarios de la aplicacion. Solo admin.
+    """
+    if current_user_role() != "admin":
+        st.warning("Solo los administradores pueden administrar usuarios.")
+        return
+
+    st.markdown(_SHARED_CSS, unsafe_allow_html=True)
+    render_panel_title("Usuarios", "o")
+
+    left_col, right_col = st.columns([1, 1.35], gap="medium")
+
+    with left_col:
+        with st.container(border=True):
+            render_small_panel_title("Crear usuario", "+")
+            with st.form("create_user_form"):
+                full_name = st.text_input("Nombre completo")
+                email = st.text_input("Correo")
+                password = st.text_input("Contrasena", type="password")
+                role = st.selectbox("Rol", ["bodega", "admin"])
+                submitted = st.form_submit_button(
+                    "Crear usuario",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+            if submitted:
+                created_user = create_app_user(
+                    {
+                        "full_name": full_name,
+                        "email": email,
+                        "password": password,
+                        "role": role,
+                        "status": "activo",
+                    }
+                )
+                if created_user:
+                    st.success("Usuario creado correctamente.")
+                    st.rerun()
+
+    with right_col:
+        users = get_users()
+        if not users:
+            st.info("No hay usuarios registrados.")
+            return
+
+        rows = []
+        for user in users:
+            rows.append(
+                {
+                    "ID": user.get("id"),
+                    "Nombre": user.get("full_name"),
+                    "Correo": user.get("email"),
+                    "Rol": user.get("role"),
+                    "Estado": user.get("status"),
+                    "Creado": str(user.get("created_at") or "").replace("T", " ").split(".")[0],
+                }
+            )
+
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def render_model_tab() -> None:
@@ -1025,14 +1616,30 @@ def main() -> None:
     if not api_online:
         st.stop()
 
-    tabs = st.tabs(
-        [
-            "▧  Clasificar producto",
-            "⇧  Cargue masivo",
-            "▣  Inventario",
-            "ⓘ  Acerca del modelo",
-        ]
-    )
+    if not is_logged_in():
+        auth_view = st.session_state.get("auth_view", "login")
+
+        if auth_view == "register":
+            register_mode = st.session_state.get("register_mode", "bootstrap")
+            show_register_page(mode=register_mode)
+        else:
+            show_login_page()
+
+        st.stop()
+
+    render_authenticated_sidebar()
+
+    tab_names = [
+        "Clasificar producto",
+        "Cargue masivo",
+        "Inventario",
+        "Logs",
+    ]
+    if current_user_role() == "admin":
+        tab_names.append("Usuarios")
+    tab_names.append("Acerca del modelo")
+
+    tabs = st.tabs(tab_names)
 
     with tabs[0]:
         if "prediction_response" not in st.session_state:
@@ -1152,13 +1759,25 @@ def main() -> None:
                                 "quantity": int(quantity),
                                 "image_path": uploaded_file.name or "captura_camara.jpg",
                                 "confidence": confidence,
+                                "audit_details": "Registro desde clasificacion individual.",
                             }
 
                             result = register_product(payload)
 
                             if result:
+                                product = result.get("product", {})
+
                                 st.success("Producto registrado correctamente.")
-                                st.json(result)
+
+                                st.markdown(
+                                    f"""
+                                    **Producto:** {product.get("name", "-")}  
+                                    **Código:** {product.get("code", "-")}  
+                                    **Categoría:** {format_category(product.get("category", "-"))}  
+                                    **Cantidad:** {product.get("quantity", "-")}
+                                    """
+                                )
+
                                 st.session_state.prediction_response = None
 
         with right_col:
@@ -1378,18 +1997,15 @@ def main() -> None:
                                         "quantity": 1,
                                         "image_path": result["filename"],
                                         "confidence": result["confidence"],
+                                        "audit_details": "Registro desde cargue masivo.",
                                     }
-                                    try:
-                                        resp = requests.post(
-                                            f"{API_BASE_URL}/products",
-                                            json=payload,
-                                            timeout=30,
-                                        )
-                                        if resp.status_code in (200, 201):
-                                            saved += 1
-                                        else:
-                                            failed += 1
-                                    except requests.RequestException:
+                                    result_response = register_product(
+                                        payload,
+                                        show_errors=False,
+                                    )
+                                    if result_response:
+                                        saved += 1
+                                    else:
                                         failed += 1
 
                                     progress.progress((i + 1) / total)
@@ -1439,6 +2055,15 @@ def main() -> None:
         render_inventory_tab()
 
     with tabs[3]:
+        render_logs_tab()
+
+    model_tab_index = 4
+    if current_user_role() == "admin":
+        with tabs[4]:
+            render_users_tab()
+        model_tab_index = 5
+
+    with tabs[model_tab_index]:
         render_model_tab()
 
 
