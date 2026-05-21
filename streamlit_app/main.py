@@ -1535,6 +1535,273 @@ def render_users_tab() -> None:
 
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+def render_model_results_tab() -> None:
+    """
+    Muestra los resultados de evaluación del modelo:
+    accuracy, correctas, incorrectas, falsos positivos, falsos negativos,
+    matriz de confusión, métricas por clase y distribución de predicciones.
+    """
+    st.markdown(_SHARED_CSS, unsafe_allow_html=True)
+
+    report_path = Path("trained_models/evaluation_report.json")
+    confusion_matrix_path = Path("trained_models/confusion_matrix.png")
+    metrics_by_class_path = Path("trained_models/test_metrics_by_class.png")
+    prediction_distribution_path = Path("trained_models/prediction_distribution.png")
+    test_predictions_path = Path("trained_models/test_predictions.csv")
+
+    render_panel_title("Resultados del modelo", "▧")
+
+    st.markdown(
+        '<div class="mdl-subtitle">'
+        'Evaluación del rendimiento del modelo usando el conjunto de prueba. '
+        'Aquí se muestran métricas reales como accuracy, predicciones correctas, '
+        'errores, falsos positivos, falsos negativos y gráficos de desempeño.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not report_path.exists():
+        st.warning(
+            "No se encontró el archivo de evaluación del modelo. "
+            "Ejecuta primero el script:"
+        )
+        st.code("python scripts/evaluate_model.py", language="bash")
+
+        st.markdown(
+            '<div class="inv-banner">'
+            '<div>'
+            '<div class="inv-banner-title">Resultados pendientes de generar</div>'
+            '<div class="inv-banner-copy">'
+            'Cuando ejecutes la evaluación, se crearán archivos como '
+            'evaluation_report.json, confusion_matrix.png, '
+            'test_metrics_by_class.png y prediction_distribution.png.'
+            '</div>'
+            '</div>'
+            '<div class="inv-banner-icon">▤</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    try:
+        evaluation_report = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        st.error(f"No se pudo leer evaluation_report.json: {exc}")
+        return
+
+    total_images = int(evaluation_report.get("total_images", 0))
+    correct_predictions = int(evaluation_report.get("correct_predictions", 0))
+    incorrect_predictions = int(evaluation_report.get("incorrect_predictions", 0))
+    test_accuracy_percent = float(evaluation_report.get("test_accuracy_percent", 0))
+    average_confidence_percent = float(
+        evaluation_report.get("average_confidence_percent", 0)
+    )
+    false_positives_total = int(evaluation_report.get("false_positives_total", 0))
+    false_negatives_total = int(evaluation_report.get("false_negatives_total", 0))
+
+    # ── Tarjetas principales ───────────────────────────────────────────────
+    metric_col_1, metric_col_2, metric_col_3, metric_col_4 = st.columns(4)
+
+    with metric_col_1:
+        st.markdown(
+            _metric_card("Accuracy test", f"{test_accuracy_percent:.2f}%", "◎"),
+            unsafe_allow_html=True,
+        )
+
+    with metric_col_2:
+        st.markdown(
+            _metric_card("Imágenes evaluadas", str(total_images), "▤"),
+            unsafe_allow_html=True,
+        )
+
+    with metric_col_3:
+        st.markdown(
+            _metric_card("Correctas", str(correct_predictions), "✓"),
+            unsafe_allow_html=True,
+        )
+
+    with metric_col_4:
+        st.markdown(
+            _metric_card("Incorrectas", str(incorrect_predictions), "!"),
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:.75rem'></div>", unsafe_allow_html=True)
+
+    metric_col_5, metric_col_6, metric_col_7 = st.columns(3)
+
+    with metric_col_5:
+        st.markdown(
+            _metric_card("Falsos positivos", str(false_positives_total), "+"),
+            unsafe_allow_html=True,
+        )
+
+    with metric_col_6:
+        st.markdown(
+            _metric_card("Falsos negativos", str(false_negatives_total), "-"),
+            unsafe_allow_html=True,
+        )
+
+    with metric_col_7:
+        st.markdown(
+            _metric_card(
+                "Confianza promedio",
+                f"{average_confidence_percent:.2f}%",
+                "⌁",
+            ),
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    # ── Explicación rápida ────────────────────────────────────────────────
+    with st.container(border=True):
+        render_small_panel_title("Resumen de evaluación", "ⓘ")
+        st.markdown(
+            """
+            Estas métricas se calculan comparando la categoría real de cada imagen del
+            conjunto de prueba contra la categoría predicha por el modelo.
+
+            - **Accuracy:** porcentaje total de imágenes clasificadas correctamente.
+            - **Correctas:** imágenes donde la categoría real coincide con la predicción.
+            - **Incorrectas:** imágenes donde el modelo se equivocó.
+            - **Falsos positivos:** veces que una categoría fue predicha incorrectamente.
+            - **Falsos negativos:** veces que una categoría real no fue detectada correctamente.
+            """
+        )
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    # ── Gráficos principales ───────────────────────────────────────────────
+    graph_col_1, graph_col_2 = st.columns(2, gap="medium")
+
+    with graph_col_1:
+        with st.container(border=True):
+            render_small_panel_title("Matriz de confusión", "▦")
+
+            if confusion_matrix_path.exists():
+                st.image(
+                    str(confusion_matrix_path),
+                    caption="Relación entre clases reales y clases predichas.",
+                    use_container_width=True,
+                )
+            else:
+                st.info("No se encontró confusion_matrix.png.")
+
+    with graph_col_2:
+        with st.container(border=True):
+            render_small_panel_title("Métricas por categoría", "▥")
+
+            if metrics_by_class_path.exists():
+                st.image(
+                    str(metrics_by_class_path),
+                    caption="Precision, recall y F1-score por categoría.",
+                    use_container_width=True,
+                )
+            else:
+                st.info("No se encontró test_metrics_by_class.png.")
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        render_small_panel_title("Distribución de predicciones", "▤")
+
+        if prediction_distribution_path.exists():
+            st.image(
+                str(prediction_distribution_path),
+                caption="Cantidad de imágenes predichas por cada categoría.",
+                use_container_width=True,
+            )
+        else:
+            st.info("No se encontró prediction_distribution.png.")
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    # ── Tabla por categoría ────────────────────────────────────────────────
+    per_class_metrics = evaluation_report.get("per_class_metrics", {})
+
+    if per_class_metrics:
+        rows = []
+
+        for category, metrics in per_class_metrics.items():
+            rows.append(
+                {
+                    "Categoría": format_category(category),
+                    "Precision": round(float(metrics.get("precision", 0)) * 100, 2),
+                    "Recall": round(float(metrics.get("recall", 0)) * 100, 2),
+                    "F1-score": round(float(metrics.get("f1_score", 0)) * 100, 2),
+                    "Soporte": int(metrics.get("support", 0)),
+                    "Verdaderos positivos": int(metrics.get("true_positives", 0)),
+                    "Falsos positivos": int(metrics.get("false_positives", 0)),
+                    "Falsos negativos": int(metrics.get("false_negatives", 0)),
+                }
+            )
+
+        with st.container(border=True):
+            render_small_panel_title("Detalle por categoría", "☷")
+            st.dataframe(
+                pd.DataFrame(rows),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    # ── Predicciones del test ──────────────────────────────────────────────
+    if test_predictions_path.exists():
+        with st.expander("Ver predicciones individuales del test"):
+            try:
+                predictions_df = pd.read_csv(test_predictions_path)
+
+                columns_to_show = [
+                    "image_path",
+                    "true_label",
+                    "predicted_label",
+                    "confidence_percent",
+                    "is_correct",
+                ]
+
+                existing_columns = [
+                    column
+                    for column in columns_to_show
+                    if column in predictions_df.columns
+                ]
+
+                if "true_label" in predictions_df.columns:
+                    predictions_df["true_label"] = predictions_df["true_label"].apply(
+                        format_category
+                    )
+
+                if "predicted_label" in predictions_df.columns:
+                    predictions_df["predicted_label"] = predictions_df[
+                        "predicted_label"
+                    ].apply(format_category)
+
+                if "confidence_percent" in predictions_df.columns:
+                    predictions_df["confidence_percent"] = predictions_df[
+                        "confidence_percent"
+                    ].round(2)
+
+                st.dataframe(
+                    predictions_df[existing_columns],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            except Exception as exc:
+                st.warning(f"No se pudo leer test_predictions.csv: {exc}")
+
+    st.markdown(
+        '<div class="inv-banner">'
+        '<div>'
+        '<div class="inv-banner-title">Evaluación del modelo completada</div>'
+        '<div class="inv-banner-copy">'
+        'Estos resultados permiten analizar el desempeño real del modelo sobre '
+        'imágenes de prueba y detectar categorías donde presenta más errores.'
+        '</div>'
+        '</div>'
+        '<div class="inv-banner-icon">◎▧</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 def render_model_tab() -> None:
     report_path = Path("trained_models/training_report.json")
@@ -1738,6 +2005,8 @@ def main() -> None:
     ]
     if current_user_role() == "admin":
         tab_names.append("Usuarios")
+
+    tab_names.append("Resultados del modelo")
     tab_names.append("Acerca del modelo")
 
     tabs = st.tabs(tab_names)
@@ -2159,15 +2428,18 @@ def main() -> None:
     with tabs[3]:
         render_logs_tab()
 
-    model_tab_index = 4
+    next_tab_index = 4
     if current_user_role() == "admin":
-        with tabs[4]:
+        with tabs[next_tab_index]:
             render_users_tab()
-        model_tab_index = 5
+        next_tab_index += 1
 
-    with tabs[model_tab_index]:
+    with tabs[next_tab_index]:
+        render_model_results_tab()
+    next_tab_index += 1
+
+    with tabs[next_tab_index]:
         render_model_tab()
-
 
 if __name__ == "__main__":
     main()

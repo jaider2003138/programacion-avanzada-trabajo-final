@@ -1,0 +1,78 @@
+{
+    "model_path": "trained_models\\product_classifier.keras",
+    "test_dir": "datasets\\processed\\test",
+    "total_images": 185,
+    "correct_predictions": 140,
+    "incorrect_predictions": 45,
+    "test_accuracy": 0.7567567567567568,
+    "test_accuracy_percent": 75.67567567567568,
+    "average_confidence": 0.7816825294011348,
+    "average_confidence_percent": 78.16825294011348,
+    "false_positives_total": 45,
+    "false_negatives_total": 45,
+    "per_class_metrics": {
+        "arroz_y_granos": {
+            "precision": 0.7222222222222222,
+            "recall": 0.7358490566037735,
+            "f1_score": 0.7289719626168224,
+            "support": 53.0,
+            "true_positives": 39,
+            "false_positives": 15,
+            "false_negatives": 14
+        },
+        "pastas": {
+            "precision": 0.8333333333333334,
+            "recall": 0.8928571428571429,
+            "f1_score": 0.8620689655172413,
+            "support": 28.0,
+            "true_positives": 25,
+            "false_positives": 5,
+            "false_negatives": 3
+        },
+        "aceites": {
+            "precision": 0.9,
+            "recall": 0.9,
+            "f1_score": 0.9,
+            "support": 20.0,
+            "true_positives": 18,
+            "false_positives": 2,
+            "false_negatives": 2
+        },
+        "salsas_y_condimentos": {
+            "precision": 0.5555555555555556,
+            "recall": 0.7142857142857143,
+            "f1_score": 0.625,
+            "support": 14.0,
+            "true_positives": 10,
+            "false_positives": 8,
+            "false_negatives": 4
+        },
+        "cafe_chocolate": {
+            "precision": 0.8333333333333334,
+            "recall": 0.6666666666666666,
+            "f1_score": 0.7407407407407407,
+            "support": 45.0,
+            "true_positives": 30,
+            "false_positives": 6,
+            "false_negatives": 15
+        },
+        "enlatados": {
+            "precision": 1.0,
+            "recall": 0.3333333333333333,
+            "f1_score": 0.5,
+            "support": 3.0,
+            "true_positives": 1,
+            "false_positives": 0,
+            "false_negatives": 2
+        },
+        "azucar_sal": {
+            "precision": 0.6538461538461539,
+            "recall": 0.7727272727272727,
+            "f1_score": 0.7083333333333334,
+            "support": 22.0,
+            "true_positives": 17,
+            "false_positives": 9,
+            "false_negatives": 5
+        }
+    }
+}
