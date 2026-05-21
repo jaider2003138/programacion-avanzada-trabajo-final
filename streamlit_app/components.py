@@ -5,6 +5,7 @@ Componentes reutilizables para la interfaz Streamlit.
 from __future__ import annotations
 
 import base64
+import math
 from collections import Counter
 from html import escape
 from pathlib import Path
@@ -17,6 +18,67 @@ import streamlit as st
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 LOGO_PATH = ASSETS_DIR / "logo.svg"
+
+try:
+    from app.api.prediction_utils import (
+        HIGH_CONFIDENCE_LEVEL,
+        LOW_CONFIDENCE_LEVEL,
+        MEDIUM_CONFIDENCE_LEVEL,
+        calculate_confidence_metrics,
+        get_confidence_level,
+        normalize_confidence_percent,
+    )
+except (ImportError, ModuleNotFoundError):
+    HIGH_CONFIDENCE_LEVEL = "Alta confianza"
+    MEDIUM_CONFIDENCE_LEVEL = "Confianza media"
+    LOW_CONFIDENCE_LEVEL = "Baja confianza"
+
+    def normalize_confidence_percent(confidence: float | int | str) -> float:
+        confidence_value = float(confidence)
+        if confidence_value <= 1:
+            confidence_value *= 100
+        return min(max(confidence_value, 0.0), 100.0)
+
+    def get_confidence_level(confidence_percent: float) -> str:
+        normalized_confidence = normalize_confidence_percent(confidence_percent)
+        if normalized_confidence >= 80:
+            return HIGH_CONFIDENCE_LEVEL
+        if normalized_confidence >= 50:
+            return MEDIUM_CONFIDENCE_LEVEL
+        return LOW_CONFIDENCE_LEVEL
+
+    def calculate_confidence_metrics(confidences: list[float]) -> dict[str, float | int]:
+        normalized_confidences: list[float] = []
+        for confidence in confidences:
+            try:
+                normalized_confidence = normalize_confidence_percent(confidence)
+            except (TypeError, ValueError):
+                continue
+
+            if math.isfinite(normalized_confidence):
+                normalized_confidences.append(normalized_confidence)
+
+        total = len(normalized_confidences)
+        average_confidence = (
+            sum(normalized_confidences) / total
+            if total
+            else 0.0
+        )
+
+        return {
+            "total": total,
+            "average_confidence": average_confidence,
+            "high_confidence": sum(
+                1 for confidence in normalized_confidences if confidence >= 80
+            ),
+            "medium_confidence": sum(
+                1 for confidence in normalized_confidences
+                if 50 <= confidence < 80
+            ),
+            "low_confidence": sum(
+                1 for confidence in normalized_confidences if confidence < 50
+            ),
+        }
 
 
 def _clean_markup(markup: str) -> str:
@@ -161,17 +223,108 @@ def _stat_card(label: str, value: str, badge: str, color: str) -> str:
     )
 
 
+def _confidence_badge_class(level: str) -> str:
+    if level == HIGH_CONFIDENCE_LEVEL:
+        return "confidence-high"
+    if level == MEDIUM_CONFIDENCE_LEVEL:
+        return "confidence-medium"
+    return "confidence-low"
+
+
+def _confidence_stat_badge_class(level: str) -> str:
+    if level == HIGH_CONFIDENCE_LEVEL:
+        return "badge-green"
+    if level == MEDIUM_CONFIDENCE_LEVEL:
+        return "badge-yellow"
+    return "badge-red"
+
+
+def render_confidence_level_badge(level: str) -> str:
+    """
+    Devuelve una etiqueta HTML para el nivel de confianza.
+    """
+    css_class = _confidence_badge_class(level)
+    return (
+        f'<span class="confidence-level-badge {css_class}">'
+        f'{escape(level)}</span>'
+    )
+
+
+def _format_confidence_percent(value: Any) -> str:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return "0.00%"
+
+    if not math.isfinite(confidence):
+        return "0.00%"
+
+    return f"{confidence:.2f}%"
+
+
+def _confidence_metric_card(label: str, value: str, css_class: str) -> str:
+    return _clean_markup(
+        f"""
+        <div class="confidence-metric-card {css_class}">
+            <div>
+                <div class="confidence-metric-label">{escape(label)}</div>
+                <div class="confidence-metric-value">{escape(value)}</div>
+            </div>
+            <span class="confidence-metric-icon"></span>
+        </div>
+        """
+    )
+
+
+def render_confidence_metric_cards(
+    metrics: dict[str, Any],
+    *,
+    include_total: bool = True,
+    include_average: bool = True,
+) -> None:
+    """
+    Renderiza tarjetas con metricas agregadas de confianza.
+    """
+    items: list[tuple[str, str, str]] = []
+
+    if include_total:
+        items.append(("Total procesados", str(metrics.get("total", 0)), "confidence-total"))
+    if include_average:
+        items.append(
+            (
+                "Confianza promedio",
+                _format_confidence_percent(metrics.get("average_confidence", 0)),
+                "confidence-average",
+            )
+        )
+
+    items.extend(
+        [
+            ("Alta confianza", str(metrics.get("high_confidence", 0)), "confidence-high"),
+            ("Confianza media", str(metrics.get("medium_confidence", 0)), "confidence-medium"),
+            ("Baja confianza", str(metrics.get("low_confidence", 0)), "confidence-low"),
+        ]
+    )
+
+    columns = st.columns(len(items))
+    for column, (label, value, css_class) in zip(columns, items):
+        with column:
+            _render_html(_confidence_metric_card(label, value, css_class))
+
+
 def get_confidence_message(confidence_percent: float | None) -> str:
     """
     Devuelve una recomendacion breve segun la confianza del modelo.
     """
     if confidence_percent is None:
         return "-"
-    if confidence_percent >= 80:
-        return "Confiable"
-    if confidence_percent >= 50:
-        return "Revisar"
-    return "Corregir"
+
+    level = get_confidence_level(confidence_percent)
+    if level == HIGH_CONFIDENCE_LEVEL:
+        return "Predicción confiable"
+    if level == MEDIUM_CONFIDENCE_LEVEL:
+        return "Revisar antes de guardar"
+    return "Corregir manualmente"
 
 
 def render_result_cards(
@@ -184,19 +337,28 @@ def render_result_cards(
     if prediction_response is None:
         category = "-"
         confidence = "-%"
-        suggestion = "-"
+        confidence_level = "-"
+        confidence_badge_class = "badge-blue"
     else:
         prediction = prediction_response["prediction"]
         category = format_category(prediction["predicted_category"])
-        confidence = f'{prediction["confidence_percent"]:.2f}%'
-        suggestion = get_confidence_message(float(prediction["confidence_percent"]))
+        confidence_value = prediction.get("confidence_percent")
+        if confidence_value in (None, ""):
+            confidence_value = prediction.get("confidence", 0)
+        confidence_percent = normalize_confidence_percent(confidence_value)
+        confidence = f"{confidence_percent:.2f}%"
+        confidence_level = (
+            prediction.get("confidence_level")
+            or get_confidence_level(confidence_percent)
+        )
+        confidence_badge_class = _confidence_stat_badge_class(confidence_level)
 
     _render_html(
         f"""
         <div class="result-stack">
             {_stat_card("Categoria predicha", category, "◇", "badge-red")}
             {_stat_card("Confianza", confidence, "⌁", "badge-blue")}
-            {_stat_card("Sugerencia", suggestion, "!", "badge-orange")}
+            {_stat_card("Nivel de confianza", confidence_level, "!", confidence_badge_class)}
         </div>
         """,
     )
@@ -209,7 +371,10 @@ def render_result_details(
     """
     Muestra el detalle de top predicciones cuando existe un resultado.
     """
-    with st.expander("Ver detalles del analisis"):
+    with st.expander(
+        "Ver detalles del analisis",
+        expanded=prediction_response is not None,
+    ):
         if prediction_response is None:
             st.caption("Clasifica una imagen para ver el detalle del modelo.")
             return
@@ -221,9 +386,16 @@ def render_result_details(
         top_data = [
             {
                 "Categoria": format_category(item["category"]),
-                "Confianza (%)": round(item["confidence_percent"], 2),
+                "Confianza (%)": round(
+                    normalize_confidence_percent(
+                        item.get("confidence_percent")
+                        if item.get("confidence_percent") not in (None, "")
+                        else item.get("confidence", 0)
+                    ),
+                    2,
+                ),
             }
-            for item in prediction.get("top_predictions", [])
+            for item in prediction.get("top_predictions", [])[:3]
         ]
         st.dataframe(pd.DataFrame(top_data), use_container_width=True)
 
@@ -486,16 +658,26 @@ def render_batch_details(
                         "Archivo": result["filename"],
                         "Categoria": "Error",
                         "Confianza (%)": "-",
+                        "Nivel de confianza": "-",
                         "Codigo": "-",
                         "Estado": result["error"],
                     }
                 )
             else:
+                confidence_value = result.get("confidence_percent")
+                if confidence_value in (None, ""):
+                    confidence_value = result.get("confidence", 0)
+                confidence_percent = normalize_confidence_percent(confidence_value)
+                confidence_level = (
+                    result.get("confidence_level")
+                    or get_confidence_level(confidence_percent)
+                )
                 rows.append(
                     {
                         "Archivo": result["filename"],
                         "Categoria": format_category(result["predicted_category"]),
-                        "Confianza (%)": round(result["confidence_percent"], 2),
+                        "Confianza (%)": round(confidence_percent, 2),
+                        "Nivel de confianza": confidence_level,
                         "Codigo": result["generated_code"],
                         "Estado": "Procesado",
                     }

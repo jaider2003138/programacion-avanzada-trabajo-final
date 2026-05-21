@@ -346,6 +346,108 @@ def apply_custom_styles() -> None:
             color: #f59e0b;
         }
 
+        .badge-green {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .badge-yellow {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .confidence-level-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: 0.78rem;
+            font-weight: 800;
+            min-height: 28px;
+            padding: 0.35rem 0.75rem;
+            white-space: nowrap;
+        }
+
+        .confidence-high {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .confidence-medium {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .confidence-low {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .confidence-total,
+        .confidence-average {
+            background: #eaf3ff;
+            color: #2563eb;
+        }
+
+        .confidence-metric-card {
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            min-height: 74px;
+            padding: 0.75rem 0.85rem;
+        }
+
+        .confidence-metric-card.confidence-high {
+            border-color: #bbf7d0;
+        }
+
+        .confidence-metric-card.confidence-medium {
+            border-color: #fde68a;
+        }
+
+        .confidence-metric-card.confidence-low {
+            border-color: #fecaca;
+        }
+
+        .confidence-metric-label {
+            color: var(--muted);
+            font-size: 0.76rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .confidence-metric-value {
+            color: var(--ink);
+            font-size: 1.25rem;
+            font-weight: 800;
+            line-height: 1.15;
+        }
+
+        .confidence-metric-icon {
+            border-radius: 999px;
+            flex: 0 0 auto;
+            height: 14px;
+            width: 14px;
+        }
+
+        .confidence-metric-card.confidence-total .confidence-metric-icon,
+        .confidence-metric-card.confidence-average .confidence-metric-icon {
+            background: #2563eb;
+        }
+
+        .confidence-metric-card.confidence-high .confidence-metric-icon {
+            background: #16a34a;
+        }
+
+        .confidence-metric-card.confidence-medium .confidence-metric-icon {
+            background: #f59e0b;
+        }
+
+        .confidence-metric-card.confidence-low .confidence-metric-icon {
+            background: #dc2626;
+        }
+
         .info-strip {
             align-items: center;
             background: linear-gradient(90deg, #eff7ff 0%, #f7fbff 100%);

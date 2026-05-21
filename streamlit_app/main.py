@@ -35,10 +35,15 @@ except ModuleNotFoundError:
 
 try:
     from streamlit_app.components import (
+        calculate_confidence_metrics,
+        get_confidence_level,
+        normalize_confidence_percent,
         render_app_header,
         render_batch_details,
         render_batch_file_list,
         render_batch_summary,
+        render_confidence_level_badge,
+        render_confidence_metric_cards,
         render_empty_preview,
         render_field_label,
         render_info_strip,
@@ -51,10 +56,15 @@ try:
     from streamlit_app.styles import apply_custom_styles
 except ModuleNotFoundError:
     from components import (
+        calculate_confidence_metrics,
+        get_confidence_level,
+        normalize_confidence_percent,
         render_app_header,
         render_batch_details,
         render_batch_file_list,
         render_batch_summary,
+        render_confidence_level_badge,
+        render_confidence_metric_cards,
         render_empty_preview,
         render_field_label,
         render_info_strip,
@@ -422,6 +432,57 @@ def format_category(category: str) -> str:
     return CATEGORY_LABELS.get(category, category)
 
 
+def confidence_percent_from_result(result: dict[str, Any]) -> float:
+    """
+    Obtiene la confianza de un resultado en formato porcentaje.
+    """
+    confidence_value = result.get("confidence_percent")
+    if confidence_value in (None, ""):
+        confidence_value = result.get("confidence", 0)
+
+    return normalize_confidence_for_display(confidence_value)
+
+
+def normalize_confidence_for_display(value: Any) -> float:
+    """
+    Normaliza una confianza y protege la UI contra valores vacios o NaN.
+    """
+    try:
+        confidence_percent = normalize_confidence_percent(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+    if pd.isna(confidence_percent):
+        return 0.0
+
+    return float(confidence_percent)
+
+
+def confidence_level_from_result(result: dict[str, Any]) -> str:
+    """
+    Obtiene el nivel de confianza de un resultado de prediccion.
+    """
+    confidence_percent = confidence_percent_from_result(result)
+    return result.get("confidence_level") or get_confidence_level(confidence_percent)
+
+
+def render_confidence_alert(confidence_percent: float) -> None:
+    """
+    Muestra una recomendacion visual segun el nivel de confianza.
+    """
+    level = get_confidence_level(confidence_percent)
+
+    if level == "Alta confianza":
+        st.success("Alta confianza: predicción confiable.")
+    elif level == "Confianza media":
+        st.warning("Confianza media: se recomienda revisar antes de guardar.")
+    else:
+        st.error(
+            "Baja confianza: se recomienda corregir manualmente "
+            "o no guardar automáticamente."
+        )
+
+
 def predict_batch_files(
     files_data: list | None = None,
     zip_data=None,
@@ -473,11 +534,12 @@ def render_prediction_result(prediction_response: dict[str, Any]) -> None:
     generated_code = prediction_response["generated_code"]
 
     predicted_category = prediction["predicted_category"]
-    confidence_percent = prediction["confidence_percent"]
+    confidence_percent = confidence_percent_from_result(prediction)
+    confidence_level = confidence_level_from_result(prediction)
 
     st.subheader("Resultado de clasificación")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric("Categoría", format_category(predicted_category))
@@ -486,14 +548,12 @@ def render_prediction_result(prediction_response: dict[str, Any]) -> None:
         st.metric("Confianza", f"{confidence_percent:.2f}%")
 
     with col3:
+        st.metric("Nivel de confianza", confidence_level)
+
+    with col4:
         st.metric("Código generado", generated_code)
 
-    if confidence_percent >= 80:
-        st.success("Predicción confiable.")
-    elif confidence_percent >= 50:
-        st.warning("Predicción con confianza media. Se recomienda revisar antes de guardar.")
-    else:
-        st.error("Predicción con baja confianza. Se recomienda corregir manualmente.")
+    render_confidence_alert(confidence_percent)
 
     st.write("Top predicciones:")
 
@@ -502,9 +562,9 @@ def render_prediction_result(prediction_response: dict[str, Any]) -> None:
     top_data = [
         {
             "Categoría": format_category(item["category"]),
-            "Confianza (%)": round(item["confidence_percent"], 2),
+            "Confianza (%)": round(confidence_percent_from_result(item), 2),
         }
-        for item in top_predictions
+        for item in top_predictions[:3]
     ]
 
     st.dataframe(pd.DataFrame(top_data), use_container_width=True)
@@ -591,6 +651,7 @@ def _build_inventory_xlsx(flt: pd.DataFrame) -> bytes:
         ("category",  "Categoría"),
         ("quantity",  "Cantidad"),
         ("_conf_pct", "Confianza (%)"),
+        ("_conf_level", "Nivel de confianza"),
         ("created_at","Fecha registro"),
         ("status",    "Estado"),
     ]
@@ -655,7 +716,7 @@ def _build_batch_xlsx(ok_results: list[dict[str, Any]]) -> bytes:
     ws = wb.active
     ws.title = "Clasificacion masiva"
 
-    headers = ["Archivo", "Categoría", "Confianza (%)", "Top 2", "Top 3"]
+    headers = ["Archivo", "Categoría", "Confianza (%)", "Nivel de confianza", "Top 2", "Top 3"]
     ws.row_dimensions[1].height = 25
     for ci, lbl in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=ci, value=lbl)
@@ -680,7 +741,8 @@ def _build_batch_xlsx(ok_results: list[dict[str, Any]]) -> bytes:
         row_vals = [
             r.get("filename", ""),
             CATEGORY_LABELS.get(r.get("predicted_category", ""), r.get("predicted_category", "")),
-            round(float(r.get("confidence_percent", 0)), 2),
+            round(confidence_percent_from_result(r), 2),
+            confidence_level_from_result(r),
             top2,
             top3,
         ]
@@ -695,7 +757,8 @@ def _build_batch_xlsx(ok_results: list[dict[str, Any]]) -> bytes:
     col_data = [
         ("Archivo",       [r.get("filename", "") for r in ok_results]),
         ("Categoría",     [CATEGORY_LABELS.get(r.get("predicted_category", ""), "") for r in ok_results]),
-        ("Confianza (%)", [round(float(r.get("confidence_percent", 0)), 2) for r in ok_results]),
+        ("Confianza (%)", [round(confidence_percent_from_result(r), 2) for r in ok_results]),
+        ("Nivel de confianza", [confidence_level_from_result(r) for r in ok_results]),
         ("Top 2",         [""]),
         ("Top 3",         [""]),
     ]
@@ -800,7 +863,7 @@ def _build_inventory_pdf(
         Paragraph(f"Productos registrados<br/><b>{total_prods}</b>", mc_sty),
         Paragraph(f"Categorias<br/><b>{total_cats}</b>", mc_sty),
         Paragraph(f"Stock total<br/><b>{total_stock}</b>", mc_sty),
-        Paragraph(f"Precision promedio<br/><b>{avg_conf:.2f}%</b>", mc_sty),
+        Paragraph(f"Confianza promedio<br/><b>{avg_conf:.2f}%</b>", mc_sty),
     ]
     metrics_tbl = Table([metrics_cells], colWidths=[avail_w / 4] * 4)
     metrics_tbl.setStyle(TableStyle([
@@ -823,6 +886,7 @@ def _build_inventory_pdf(
         ("category",  "Categoria"),
         ("quantity",  "Cantidad"),
         ("_conf_pct", "Confianza (%)"),
+        ("_conf_level", "Nivel"),
         ("created_at","Fecha"),
         ("status",    "Estado"),
     ]
@@ -847,7 +911,8 @@ def _build_inventory_pdf(
 
     width_map = {
         "id": 0.5, "code": 1.2, "name": 2.0, "category": 1.8,
-        "quantity": 0.8, "_conf_pct": 1.2, "created_at": 1.8, "status": 0.9,
+        "quantity": 0.8, "_conf_pct": 1.2, "_conf_level": 1.5,
+        "created_at": 1.8, "status": 0.9,
     }
     raw_w = [width_map.get(src, 1.0) for src, _ in existing]
     col_widths_pdf = [avail_w * w / sum(raw_w) for w in raw_w]
@@ -912,6 +977,8 @@ _SHARED_CSS = """
 .inv-banner-copy{color:var(--muted);font-size:.88rem}
 .inv-banner-icon{font-size:3rem;opacity:.22;flex:0 0 auto}
 .mdl-subtitle{color:var(--muted);font-size:.95rem;margin:-.5rem 0 1.25rem}
+.mdl-confidence-copy{background:#fff;border:1px solid var(--panel-border);border-radius:8px;
+  color:var(--muted);font-size:.9rem;line-height:1.55;padding:.9rem 1rem}
 .mdl-status-ok{color:#15803d;font-weight:800}
 .mdl-status-err{color:#dc2626;font-weight:800}
 .mdl-detail-row{display:flex;align-items:flex-start;gap:.65rem;padding:.5rem 0;
@@ -985,25 +1052,36 @@ def render_inventory_tab() -> None:
     df = pd.DataFrame(products)
 
     if "confidence" in df.columns:
-        df["_conf_pct"] = (df["confidence"].clip(0, 1) * 100).round(2)
+        df["_conf_pct"] = df["confidence"].apply(normalize_confidence_for_display).round(2)
+        confidence_metrics = calculate_confidence_metrics(df["confidence"].tolist())
     else:
         df["_conf_pct"] = 0.0
+        confidence_metrics = calculate_confidence_metrics([])
+
+    df["_conf_level"] = df["_conf_pct"].apply(get_confidence_level)
 
     # ── Metrics ───────────────────────────────────────────────────────────
     total_prods = len(df)
     total_cats  = df["category"].nunique() if "category" in df.columns else 0
     total_stock = int(df["quantity"].sum()) if "quantity" in df.columns else 0
-    avg_conf    = float(df["_conf_pct"].mean())
+    avg_conf    = float(confidence_metrics.get("average_confidence", 0.0))
 
     mc1, mc2, mc3, mc4 = st.columns(4)
     for col, lbl, val, icon in [
         (mc1, "Productos registrados", str(total_prods),   "▣"),
         (mc2, "Categorías",            str(total_cats),    "◈"),
         (mc3, "Stock total",           str(total_stock),   "▤"),
-        (mc4, "Precisión promedio",    f"{avg_conf:.2f}%", "◎"),
+        (mc4, "Confianza promedio",    f"{avg_conf:.2f}%", "◎"),
     ]:
         with col:
             st.markdown(_metric_card(lbl, val, icon), unsafe_allow_html=True)
+
+    st.markdown("<div style='height:.75rem'></div>", unsafe_allow_html=True)
+    render_confidence_metric_cards(
+        confidence_metrics,
+        include_total=False,
+        include_average=False,
+    )
 
     st.markdown("<div style='height:.75rem'></div>", unsafe_allow_html=True)
 
@@ -1073,10 +1151,15 @@ def render_inventory_tab() -> None:
         st.caption("La exportacion de inventario esta disponible solo para admin.")
 
     # ── Table ──────────────────────────────────────────────────────────────
-    display_cols = ["id", "code", "name", "category", "quantity", "_conf_pct", "created_at", "status"]
+    display_cols = [
+        "id", "code", "name", "category", "quantity",
+        "_conf_pct", "_conf_level", "created_at", "status",
+    ]
     col_labels   = {
         "id": "#", "code": "Código", "name": "Nombre", "category": "Categoría",
-        "quantity": "Cantidad", "_conf_pct": "Confianza", "created_at": "Fecha", "status": "Estado",
+        "quantity": "Cantidad", "_conf_pct": "Confianza",
+        "_conf_level": "Nivel de confianza",
+        "created_at": "Fecha", "status": "Estado",
     }
     visible = [c for c in display_cols if c in flt.columns]
 
@@ -1094,6 +1177,8 @@ def render_inventory_tab() -> None:
                     cells += f"<td>{_conf_bar(float(v))}</td>"
                 except (TypeError, ValueError):
                     cells += f"<td>{escape(str(v))}</td>"
+            elif col == "_conf_level":
+                cells += f"<td>{render_confidence_level_badge(str(v))}</td>"
             elif col == "status":
                 cells += f'<td><span class="inv-status-ok">● {escape(str(v))}</span></td>'
             elif col == "id":
@@ -1517,6 +1602,22 @@ def render_model_tab() -> None:
                 unsafe_allow_html=True,
             )
 
+        st.markdown("<div style='height:.65rem'></div>", unsafe_allow_html=True)
+
+        with st.container(border=True):
+            render_small_panel_title("Métricas de confianza", "◎")
+            st.markdown(
+                '<div class="mdl-confidence-copy">'
+                'Las métricas de confianza indican qué tan seguro está el modelo al '
+                'clasificar un producto. El sistema clasifica las predicciones en tres '
+                'niveles: alta confianza cuando el resultado es mayor o igual al 80%, '
+                'confianza media entre 50% y 79.99%, y baja confianza cuando es menor '
+                'al 50%. Estas métricas ayudan a decidir si un producto puede '
+                'registrarse directamente o si debe revisarse manualmente.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
     with right_col:
         with st.container(border=True):
             render_small_panel_title("Resumen técnico", "⚙")
@@ -1700,11 +1801,10 @@ def main() -> None:
 
                     if not is_classifiable:
                         st.warning(
-                            "⚠️ No fue posible clasificar esta imagen. Verifica que muestre "
-                            "claramente un producto de despensa (aceite, arroz, pasta, "
-                            "enlatado, café, etc.). Intenta con otra imagen."
+                            "La predicción está por debajo del umbral de registro directo. "
+                            "Revisa el nivel de confianza, corrige manualmente si aplica "
+                            "o intenta con otra imagen más clara."
                         )
-                        st.session_state.prediction_response = None
                     else:
                         generated_code = prediction_response["generated_code"]
 
@@ -1798,15 +1898,12 @@ def main() -> None:
 
                 with result_col:
                     _pred_resp = st.session_state.get("prediction_response")
-                    _visible_pred = (
-                        _pred_resp
-                        if (
-                            _pred_resp is None
-                            or _pred_resp.get("prediction", {}).get("is_classifiable", True)
-                        )
-                        else None
-                    )
+                    _visible_pred = _pred_resp
                     render_result_cards(_visible_pred, format_category)
+                    if _visible_pred is not None:
+                        render_confidence_alert(
+                            confidence_percent_from_result(_visible_pred["prediction"])
+                        )
 
                 render_result_details(_visible_pred, format_category)
 
@@ -1939,14 +2036,19 @@ def main() -> None:
                     if ok_results:
                         classifiable = [r for r in ok_results if r.get("is_classifiable", True)]
                         not_classif  = [r for r in ok_results if not r.get("is_classifiable", True)]
+                        confidence_metrics = calculate_confidence_metrics(
+                            [confidence_percent_from_result(r) for r in ok_results]
+                        )
 
                         render_small_panel_title("Resultados de clasificacion", "✓")
+                        render_confidence_metric_cards(confidence_metrics)
 
                         table_data = [
                             {
                                 "Archivo": r["filename"],
                                 "Categoria": format_category(r["predicted_category"]),
-                                "Confianza (%)": round(r["confidence_percent"], 2),
+                                "Confianza (%)": round(confidence_percent_from_result(r), 2),
+                                "Nivel de confianza": confidence_level_from_result(r),
                                 "Estado": "✓ Clasificado" if r.get("is_classifiable", True) else "⚠ No clasificable",
                             }
                             for r in ok_results

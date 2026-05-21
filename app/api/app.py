@@ -383,6 +383,7 @@ def predict():
             details={
                 "filename": image_file.filename,
                 "confidence_percent": prediction.get("confidence_percent"),
+                "confidence_level": prediction.get("confidence_level"),
                 "is_classifiable": prediction.get("is_classifiable", True),
             },
         )
@@ -487,6 +488,7 @@ def predict_batch():
                     "predicted_category": prediction["predicted_category"],
                     "confidence": prediction["confidence"],
                     "confidence_percent": prediction["confidence_percent"],
+                    "confidence_level": prediction.get("confidence_level"),
                     "top_predictions": prediction["top_predictions"],
                     "generated_code": generated_code,
                     "is_classifiable": prediction.get("is_classifiable", True),
@@ -517,6 +519,7 @@ def predict_batch():
                 "filename": result.get("filename"),
                 "source": "cargue_masivo",
                 "confidence_percent": result.get("confidence_percent"),
+                "confidence_level": result.get("confidence_level"),
                 "is_classifiable": result.get("is_classifiable", True),
             },
         )

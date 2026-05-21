@@ -24,6 +24,73 @@ CONFIDENCE_THRESHOLD = 0.70
 _session: ort.InferenceSession | None = None
 _class_names: list[str] | None = None
 
+HIGH_CONFIDENCE_LEVEL = "Alta confianza"
+MEDIUM_CONFIDENCE_LEVEL = "Confianza media"
+LOW_CONFIDENCE_LEVEL = "Baja confianza"
+
+
+def normalize_confidence_percent(confidence: float | int | str) -> float:
+    """
+    Normaliza una confianza expresada como 0-1 o 0-100 a porcentaje.
+    """
+    confidence_value = float(confidence)
+
+    if confidence_value <= 1:
+        confidence_value *= 100
+
+    return min(max(confidence_value, 0.0), 100.0)
+
+
+def get_confidence_level(confidence_percent: float) -> str:
+    """
+    Clasifica la confianza del modelo en alta, media o baja.
+    """
+    normalized_confidence = normalize_confidence_percent(confidence_percent)
+
+    if normalized_confidence >= 80:
+        return HIGH_CONFIDENCE_LEVEL
+    if normalized_confidence >= 50:
+        return MEDIUM_CONFIDENCE_LEVEL
+    return LOW_CONFIDENCE_LEVEL
+
+
+def calculate_confidence_metrics(confidences: list[float]) -> dict[str, float | int]:
+    """
+    Calcula metricas agregadas de confianza para valores 0-1 o 0-100.
+    """
+    normalized_confidences: list[float] = []
+
+    for confidence in confidences:
+        try:
+            normalized_confidence = normalize_confidence_percent(confidence)
+        except (TypeError, ValueError):
+            continue
+
+        if np.isfinite(normalized_confidence):
+            normalized_confidences.append(normalized_confidence)
+
+    total = len(normalized_confidences)
+    average_confidence = (
+        sum(normalized_confidences) / total
+        if total
+        else 0.0
+    )
+
+    return {
+        "total": total,
+        "average_confidence": average_confidence,
+        "high_confidence": sum(
+            1 for confidence in normalized_confidences if confidence >= 80
+        ),
+        "medium_confidence": sum(
+            1 for confidence in normalized_confidences
+            if 50 <= confidence < 80
+        ),
+        "low_confidence": sum(
+            1 for confidence in normalized_confidences if confidence < 50
+        ),
+    }
+
 
 def load_labels(labels_path: Path = LABELS_PATH) -> list[str]:
     """
@@ -105,12 +172,14 @@ def predict_pil_image(image: Image.Image) -> dict[str, Any]:
 
     best_index = int(top_indices[0])
     best_confidence = float(predictions[best_index])
+    best_confidence_percent = best_confidence * 100
     is_classifiable = best_confidence >= CONFIDENCE_THRESHOLD
 
     return {
         "predicted_category": class_names[best_index],
         "confidence": best_confidence,
-        "confidence_percent": best_confidence * 100,
+        "confidence_percent": best_confidence_percent,
+        "confidence_level": get_confidence_level(best_confidence_percent),
         "top_predictions": top_predictions,
         "is_classifiable": is_classifiable,
         "classification_warning": (

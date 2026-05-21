@@ -37,6 +37,17 @@ IMAGE_SIZE = (224, 224)
 TOP_K = 3
 
 
+def get_confidence_level(confidence_percent: float) -> str:
+    """
+    Clasifica la confianza del modelo segun el porcentaje recibido.
+    """
+    if confidence_percent >= 80:
+        return "Alta confianza"
+    if confidence_percent >= 50:
+        return "Confianza media"
+    return "Baja confianza"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Clasificar una imagen y registrar el producto en inventario."
@@ -144,6 +155,7 @@ def print_prediction_result(result: dict) -> None:
     print("=" * 40)
     print(f"Categoría predicha: {result['predicted_category']}")
     print(f"Confianza: {result['confidence_percent']:.2f}%")
+    print(f"Nivel de confianza: {get_confidence_level(result['confidence_percent'])}")
 
     print("\nTop predicciones:")
     for index, item in enumerate(result["top_predictions"], start=1):
@@ -190,9 +202,10 @@ def main() -> None:
 
     if confidence < args.min_confidence:
         print("\nAdvertencia:")
+        confidence_level = get_confidence_level(result["confidence_percent"])
         print(
-            f"La confianza es baja ({result['confidence_percent']:.2f}%). "
-            "No se registrará automáticamente."
+            f"La confianza ({result['confidence_percent']:.2f}%, {confidence_level}) "
+            "está por debajo del mínimo requerido. No se registrará automáticamente."
         )
         print("Puedes registrar manualmente este producto más adelante.")
         return
@@ -217,6 +230,7 @@ def main() -> None:
     print(f"Categoría: {product['category']}")
     print(f"Cantidad: {product['quantity']}")
     print(f"Confianza: {product['confidence'] * 100:.2f}%")
+    print(f"Nivel de confianza: {get_confidence_level(product['confidence'] * 100)}")
     print(f"Fecha: {product['created_at']}")
     print(f"Estado: {product['status']}")
     print("=" * 40)
