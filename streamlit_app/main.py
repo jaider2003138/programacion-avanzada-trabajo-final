@@ -1336,39 +1336,29 @@ def render_logs_tab() -> None:
     with st.container(border=True):
         render_small_panel_title("Filtros", "⌕")
 
-        action_labels = ["Todas las acciones", *AUDIT_ACTION_LABELS.values()]
-        label_to_action = {
-            label: action
-            for action, label in AUDIT_ACTION_LABELS.items()
-        }
-
-        filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(
-            [1.4, 1.4, 1.2, 1.0],
+        # Ajustamos a 3 columnas ya que eliminamos el selector de acciones
+        filter_col_1, filter_col_2, filter_col_3 = st.columns(
+            [1.5, 1.5, 1.0],
             gap="medium",
         )
 
         with filter_col_1:
-            selected_action_label = st.selectbox(
-                "Filtro por accion",
-                action_labels,
-                key="audit_action_filter",
-            )
-
-        with filter_col_2:
             user_filter = st.text_input(
                 "Filtro por usuario/correo",
                 placeholder="Nombre o correo",
                 key="audit_user_filter",
             )
 
-        with filter_col_3:
+        with filter_col_2:
             product_code_filter = st.text_input(
                 "Filtro por codigo de producto",
                 placeholder="INV-...",
                 key="audit_product_code_filter",
             )
 
-        with filter_col_4:
+        with filter_col_3:
+            # Espaciador para que el botón quede alineado con los inputs de texto
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
             refresh_clicked = st.button(
                 "Actualizar logs",
                 type="primary",
@@ -1378,10 +1368,11 @@ def render_logs_tab() -> None:
     if refresh_clicked:
         st.session_state["audit_logs_refreshed_at"] = datetime.now().isoformat()
 
-    filters: dict[str, str] = {}
-    selected_action = label_to_action.get(selected_action_label)
-    if selected_action:
-        filters["action"] = selected_action
+    # AQUÍ ESTÁ LA MODIFICACIÓN CLAVE: 
+    # Forzamos a que siempre busque únicamente los productos agregados
+    filters: dict[str, str] = {
+        "action": "producto_agregado"
+    }
 
     cleaned_user_filter = user_filter.strip()
     if cleaned_user_filter:
