@@ -2112,33 +2112,43 @@ def main() -> None:
                             type="primary",
                             use_container_width=True,
                         ):
-                            payload = {
-                                "code": generated_code,
-                                "name": product_name,
-                                "category": selected_category,
-                                "quantity": int(quantity),
-                                "image_path": uploaded_file.name or "captura_camara.jpg",
-                                "confidence": confidence,
-                                "audit_details": "Registro desde clasificacion individual.",
-                            }
+                            # 1. Consultamos los productos que ya existen
+                            current_inventory = get_products()
+                            # 2. Extraemos los nombres en minúsculas para comparar sin importar mayúsculas
+                            existing_names = [str(p.get("name", "")).strip().lower() for p in current_inventory]
+                            
+                            # 3. Verificamos si el nombre que el usuario quiere guardar ya existe
+                            if product_name.strip().lower() in existing_names:
+                                st.error(f"⚠️ Ya existe un producto registrado con el nombre '{product_name}'. Por favor, cámbialo antes de guardar.")
+                            else:
+                                # Si no existe, procedemos a guardar normalmente
+                                payload = {
+                                    "code": generated_code,
+                                    "name": product_name,
+                                    "category": selected_category,
+                                    "quantity": int(quantity),
+                                    "image_path": uploaded_file.name or "captura_camara.jpg",
+                                    "confidence": confidence,
+                                    "audit_details": "Registro desde clasificacion individual.",
+                                }
 
-                            result = register_product(payload)
+                                result = register_product(payload)
 
-                            if result:
-                                product = result.get("product", {})
+                                if result:
+                                    product = result.get("product", {})
 
-                                st.success("Producto registrado correctamente.")
+                                    st.success("Producto registrado correctamente.")
 
-                                st.markdown(
-                                    f"""
-                                    **Producto:** {product.get("name", "-")}  
-                                    **Código:** {product.get("code", "-")}  
-                                    **Categoría:** {format_category(product.get("category", "-"))}  
-                                    **Cantidad:** {product.get("quantity", "-")}
-                                    """
-                                )
+                                    st.markdown(
+                                        f"""
+                                        **Producto:** {product.get("name", "-")}  
+                                        **Código:** {product.get("code", "-")}  
+                                        **Categoría:** {format_category(product.get("category", "-"))}  
+                                        **Cantidad:** {product.get("quantity", "-")}
+                                        """
+                                    )
 
-                                st.session_state.prediction_response = None
+                                    st.session_state.prediction_response = None
 
         with right_col:
             with st.container(border=True):
