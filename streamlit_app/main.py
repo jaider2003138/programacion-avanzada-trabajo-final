@@ -1996,8 +1996,9 @@ def main() -> None:
     ]
     if current_user_role() == "admin":
         tab_names.append("Usuarios")
+        tab_names.append("Resultados del modelo")
 
-    tab_names.append("Resultados del modelo")
+    
     tab_names.append("Acerca del modelo")
 
     tabs = st.tabs(tab_names)
@@ -2430,15 +2431,17 @@ def main() -> None:
         render_logs_tab()
 
     next_tab_index = 4
+    # Aquí metemos ambas pestañas restringidas dentro del mismo 'if'
     if current_user_role() == "admin":
         with tabs[next_tab_index]:
             render_users_tab()
         next_tab_index += 1
+        
+        with tabs[next_tab_index]:
+            render_model_results_tab()
+        next_tab_index += 1
 
-    with tabs[next_tab_index]:
-        render_model_results_tab()
-    next_tab_index += 1
-
+    # La última pestaña ("Acerca del modelo") se renderiza para todos
     with tabs[next_tab_index]:
         render_model_tab()
 
