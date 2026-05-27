@@ -1163,9 +1163,31 @@ def render_inventory_tab() -> None:
     }
     visible = [c for c in display_cols if c in flt.columns]
 
+    # --- NUEVO: LÓGICA DE PAGINACIÓN ---
+    ITEMS_PER_PAGE = 10
+    total_items = len(flt)
+    total_pages = max(1, (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+
+    # Inicializar la página actual en memoria si no existe
+    if "inventory_page" not in st.session_state:
+        st.session_state.inventory_page = 1
+
+    # Si se aplica un filtro y la página actual queda vacía, la devolvemos a la 1
+    if st.session_state.inventory_page > total_pages:
+        st.session_state.inventory_page = 1
+
+    current_page = st.session_state.inventory_page
+    start_idx = (current_page - 1) * ITEMS_PER_PAGE
+    end_idx = start_idx + ITEMS_PER_PAGE
+
+    # Cortamos la tabla para que solo tenga los 10 registros de la página actual
+    paginated_flt = flt.iloc[start_idx:end_idx]
+
     thead = "".join(f'<th>{escape(col_labels.get(c, c))}</th>' for c in visible)
     tbody = ""
-    for row_i, row in flt.reset_index(drop=True).iterrows():
+    
+    # Renderizamos únicamente la porción de la tabla seleccionada
+    for row_i, row in paginated_flt.reset_index(drop=True).iterrows():
         cells = ""
         for col in visible:
             v = row.get(col, "")
@@ -1182,7 +1204,8 @@ def render_inventory_tab() -> None:
             elif col == "status":
                 cells += f'<td><span class="inv-status-ok">● {escape(str(v))}</span></td>'
             elif col == "id":
-                cells += f"<td>{row_i}</td>"
+                # Aseguramos que la numeración sea continua (1..10, 11..20, etc.)
+                cells += f"<td>{start_idx + row_i + 1}</td>"
             else:
                 cells += f"<td>{escape(str(v))}</td>"
         tbody += f"<tr>{cells}</tr>"
@@ -1202,12 +1225,35 @@ def render_inventory_tab() -> None:
         unsafe_allow_html=True,
     )
 
+    # --- CONTROLES DE PAGINACIÓN VISUALES ---
+    if total_pages > 1:
+        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+        col_prev, col_info, col_next = st.columns([1, 4, 1])
+        
+        with col_prev:
+            if st.button("⬅️ Anterior", disabled=current_page == 1, use_container_width=True):
+                st.session_state.inventory_page -= 1
+                st.rerun()
+                
+        with col_info:
+            st.markdown(
+                f"<div style='text-align: center; padding-top: 0.4rem; color: var(--muted); font-size: 0.95rem;'>"
+                f"Página <b>{current_page}</b> de <b>{total_pages}</b>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            
+        with col_next:
+            if st.button("Siguiente ➡️", disabled=current_page == total_pages, use_container_width=True):
+                st.session_state.inventory_page += 1
+                st.rerun()
+
     # ── Bottom banner ──────────────────────────────────────────────────────
-    if is_admin and not flt.empty and "code" in flt.columns:
+    if not flt.empty and "code" in flt.columns:
         with st.container(border=True):
-            render_small_panel_title("Administrar producto", "!")
+            render_small_panel_title("Editar producto", "✎")
             selected_code = st.selectbox(
-                "Producto",
+                "Selecciona el código del producto a editar",
                 options=flt["code"].astype(str).tolist(),
                 key="admin_product_code",
             )
@@ -1215,12 +1261,20 @@ def render_inventory_tab() -> None:
             selected_row = selected_rows.iloc[0] if not selected_rows.empty else None
 
             if selected_row is not None:
-                edit_col_1, edit_col_2, edit_col_3 = st.columns([1.4, 0.8, 1.1])
+                # Obtenemos la categoría original para enviarla oculta
+                current_category = str(selected_row.get("category", ""))
+                
+                # Mostramos la categoría solo como texto informativo
+                st.caption(f"**Categoría asignada:** {format_category(current_category)} *(No editable)*")
+
+                # Dejamos solo 2 columnas: Nombre y Cantidad
+                edit_col_1, edit_col_2 = st.columns([2, 1])
                 with edit_col_1:
                     edit_name = st.text_input(
                         "Nombre",
                         value=str(selected_row.get("name", "")),
-                        key="admin_edit_name",
+                        # CLAVE DINÁMICA: Cambia según el código seleccionado
+                        key=f"edit_name_{selected_code}", 
                     )
                 with edit_col_2:
                     edit_quantity = st.number_input(
@@ -1228,19 +1282,8 @@ def render_inventory_tab() -> None:
                         min_value=0,
                         value=int(selected_row.get("quantity", 0)),
                         step=1,
-                        key="admin_edit_quantity",
-                    )
-                with edit_col_3:
-                    category_options = list(CATEGORY_LABELS.keys())
-                    current_category = str(selected_row.get("category", category_options[0]))
-                    edit_category = st.selectbox(
-                        "Categoria",
-                        options=category_options,
-                        index=category_options.index(current_category)
-                        if current_category in category_options
-                        else 0,
-                        format_func=format_category,
-                        key="admin_edit_category",
+                        # CLAVE DINÁMICA: Cambia según el código seleccionado
+                        key=f"edit_qty_{selected_code}", 
                     )
 
                 save_col, deactivate_col = st.columns(2)
@@ -1255,23 +1298,32 @@ def render_inventory_tab() -> None:
                             {
                                 "name": edit_name,
                                 "quantity": int(edit_quantity),
-                                "category": edit_category,
-                                "audit_details": "Actualizacion desde Streamlit.",
+                                "category": current_category, # Enviamos la categoría intacta
+                                "audit_details": "Actualización de nombre/cantidad desde Streamlit.",
                             },
                         )
                         if updated:
-                            st.success("Producto actualizado.")
+                            st.success("Producto actualizado correctamente.")
                             st.rerun()
 
                 with deactivate_col:
-                    if st.button(
-                        "Desactivar producto",
-                        use_container_width=True,
-                    ):
-                        deactivated = deactivate_product_api(selected_code)
-                        if deactivated:
-                            st.success("Producto desactivado.")
-                            st.rerun()
+                    # Dejamos la opción de desactivar solo para admins por seguridad
+                    if is_admin:
+                        if st.button(
+                            "Desactivar producto",
+                            use_container_width=True,
+                        ):
+                            deactivated = deactivate_product_api(selected_code)
+                            if deactivated:
+                                st.success("Producto desactivado.")
+                                st.rerun()
+                    else:
+                        st.button(
+                            "Desactivar producto",
+                            use_container_width=True,
+                            disabled=True,
+                            help="Solo los administradores pueden desactivar/eliminar productos del sistema."
+                        )
 
     st.markdown(
         '<div class="inv-banner">'
@@ -1369,23 +1421,30 @@ def render_logs_tab() -> None:
         st.session_state["audit_logs_refreshed_at"] = datetime.now().isoformat()
 
     # AQUÍ ESTÁ LA MODIFICACIÓN CLAVE: 
-    # Forzamos a que siempre busque únicamente los productos agregados
-    filters: dict[str, str] = {
-        "action": "producto_agregado"
-    }
-
+    # 1. Preparamos los filtros base (usuario y código de producto)
+    base_filters: dict[str, str] = {}
+    
     cleaned_user_filter = user_filter.strip()
     if cleaned_user_filter:
         if "@" in cleaned_user_filter:
-            filters["user_email"] = cleaned_user_filter
+            base_filters["user_email"] = cleaned_user_filter
         else:
-            filters["user_name"] = cleaned_user_filter
+            base_filters["user_name"] = cleaned_user_filter
 
     cleaned_product_code = product_code_filter.strip()
     if cleaned_product_code:
-        filters["product_code"] = cleaned_product_code
+        base_filters["product_code"] = cleaned_product_code
 
-    logs = get_audit_logs(filters)
+    # 2. Consultamos los tres movimientos clave del inventario
+    logs_agregados = get_audit_logs({**base_filters, "action": "producto_agregado"})
+    logs_actualizados = get_audit_logs({**base_filters, "action": "producto_actualizado"})
+    logs_desactivados = get_audit_logs({**base_filters, "action": "producto_desactivado"})
+
+    # 3. Unimos los resultados en una sola lista
+    logs = logs_agregados + logs_actualizados + logs_desactivados
+    
+    # 4. Ordenamos todo por fecha (del más reciente al más antiguo)
+    logs.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
 
     total_logs = len(logs)
     total_users = len(

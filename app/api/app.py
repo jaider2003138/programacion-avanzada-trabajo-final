@@ -672,18 +672,29 @@ def patch_product(code: str):
     """
     data: dict[str, Any] = request.get_json(silent=True) or {}
     user = _get_request_user(data)
-    auth_error = _require_roles(user, {"admin"})
+    
+    # 1. Permitimos que TANTO admin COMO bodega puedan hacer peticiones aquí
+    auth_error = _require_roles(user, {"admin", "bodega"})
     if auth_error:
         return auth_error
 
-    allowed_fields = {
-        "name",
-        "category",
-        "quantity",
-        "image_path",
-        "confidence",
-        "status",
-    }
+    # 2. Control estricto de seguridad: ¿Qué puede editar cada rol?
+    if user.get("user_role") == "admin":
+        allowed_fields = {
+            "name",
+            "category",
+            "quantity",
+            "image_path",
+            "confidence",
+            "status",
+        }
+    else:
+        # Los usuarios de bodega SOLO pueden alterar estos dos campos
+        allowed_fields = {
+            "name",
+            "quantity",
+        }
+
     updates = {
         field: data[field]
         for field in allowed_fields
@@ -693,7 +704,7 @@ def patch_product(code: str):
     if not updates:
         return jsonify(
             {
-                "error": "No se enviaron campos actualizables.",
+                "error": "No se enviaron campos actualizables o no tienes permisos para editarlos.",
                 "allowed_fields": sorted(allowed_fields),
             }
         ), 400
@@ -744,7 +755,6 @@ def patch_product(code: str):
                 "detail": str(exc),
             }
         ), 500
-
 
 @app.route("/products/<code>", methods=["DELETE"])
 def delete_product(code: str):
