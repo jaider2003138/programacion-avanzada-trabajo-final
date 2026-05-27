@@ -2314,84 +2314,150 @@ def main() -> None:
                         render_small_panel_title("Resultados de clasificacion", "✓")
                         render_confidence_metric_cards(confidence_metrics)
 
-                        table_data = [
-                            {
-                                "Archivo": r["filename"],
-                                "Categoria": format_category(r["predicted_category"]),
-                                "Confianza (%)": round(confidence_percent_from_result(r), 2),
-                                "Nivel de confianza": confidence_level_from_result(r),
-                                "Estado": "✓ Clasificado" if r.get("is_classifiable", True) else "⚠ No clasificable",
-                            }
-                            for r in ok_results
-                        ]
-                        df_results = pd.DataFrame(table_data)
-                        st.dataframe(df_results, use_container_width=True)
+                        # --- CONTROL DE ELEMENTOS ELIMINADOS ---
+                        if "deleted_batch_items" not in st.session_state or st.session_state.get("last_batch_signature") != st.session_state.batch_signature:
+                            st.session_state.deleted_batch_items = set()
+                            st.session_state.last_batch_signature = st.session_state.batch_signature
 
-                        export_col, save_col = st.columns(2)
+                        # Filtramos las imágenes eliminadas
+                        visible_raw_results = [r for r in ok_results if r["filename"] not in st.session_state.deleted_batch_items]
 
-                        with export_col:
-                            _batch_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            st.download_button(
-                                "⬇  Exportar Excel",
-                                data=_build_batch_xlsx(ok_results),
-                                file_name=f"clasificacion_masiva_{_batch_ts}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key="btn_export_xlsx",
-                                use_container_width=True,
+                        if not visible_raw_results:
+                            st.info("No hay imágenes en la lista. Todas han sido eliminadas.")
+                        else:
+                            st.markdown(
+                                "<div style='margin-top: 1rem; margin-bottom: 0.5rem; font-size: 0.95rem; color: var(--muted);'>"
+                                "💡 <b>Tip:</b> Edita Nombre, Cantidad o Categoría. Desmarca 'Guardar' para omitir, o presiona 🗑️ para quitar de la lista por completo."
+                                "</div>",
+                                unsafe_allow_html=True
                             )
 
-                        with save_col:
-                            save_clicked = st.button(
-                                "Guardar todo",
-                                key="btn_batch_save",
-                                type="primary",
-                                use_container_width=True,
-                            )
+                            # --- ENCABEZADOS DE LA LISTA CON TODAS TUS COLUMNAS ---
+                            h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([0.6, 2, 0.9, 1.4, 1.8, 0.9, 1.1, 0.6])
+                            h1.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Guardar</div>", unsafe_allow_html=True)
+                            h2.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Nombre</div>", unsafe_allow_html=True)
+                            h3.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Cant.</div>", unsafe_allow_html=True)
+                            h4.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Categoría</div>", unsafe_allow_html=True)
+                            h5.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Archivo</div>", unsafe_allow_html=True)
+                            h6.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Confianza</div>", unsafe_allow_html=True)
+                            h7.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Estado</div>", unsafe_allow_html=True)
+                            h8.markdown("<div style='font-size:0.8rem;font-weight:bold;color:#526079;'>Eliminar</div>", unsafe_allow_html=True)
 
-                        if save_clicked:
-                            to_save = classifiable
-                            skipped_conf = len(not_classif)
-                            if not to_save:
-                                st.warning(
-                                    f"No hay imágenes clasificables para guardar. "
-                                    f"Omitidas por baja confianza: {skipped_conf}"
+                            st.markdown("<hr style='margin: 0.2rem 0 0.5rem 0; border-color: #f0f4fa;'>", unsafe_allow_html=True)
+
+                            formatted_categories = [format_category(c) for c in CATEGORY_LABELS.keys()]
+                            to_save_data = []
+
+                            # --- DIBUJAR CADA FILA (SIN OCULTAR NADA) ---
+                            for r in visible_raw_results:
+                                fname = r["filename"]
+                                is_classif = r.get("is_classifiable", True)
+                                estado_txt = "✓ Clasificado" if is_classif else "⚠ No clasificable"
+                                
+                                col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([0.6, 2, 0.9, 1.4, 1.8, 0.9, 1.1, 0.6])
+                                
+                                with col1:
+                                    st.markdown("<div style='height: 0.35rem;'></div>", unsafe_allow_html=True)
+                                    guardar = st.checkbox("Guardar", value=is_classif, key=f"keep_{fname}", label_visibility="collapsed")
+                                with col2:
+                                    edited_name = st.text_input("Nombre", value=Path(fname).stem, key=f"name_{fname}", label_visibility="collapsed")
+                                with col3:
+                                    edited_qty = st.number_input("Cant", min_value=1, value=1, step=1, key=f"qty_{fname}", label_visibility="collapsed")
+                                with col4:
+                                    current_cat = format_category(r["predicted_category"])
+                                    cat_idx = formatted_categories.index(current_cat) if current_cat in formatted_categories else 0
+                                    edited_cat = st.selectbox("Cat", options=formatted_categories, index=cat_idx, key=f"cat_{fname}", label_visibility="collapsed")
+                                with col5:
+                                    # Muestra el nombre del archivo cortado elegantemente si es muy largo
+                                    st.markdown(f"<div style='padding-top: 0.6rem; font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;' title='{fname}'>{fname}</div>", unsafe_allow_html=True)
+                                with col6:
+                                    st.markdown(f"<div style='padding-top: 0.6rem; font-size: 0.8rem; color: var(--muted);'>{confidence_percent_from_result(r):.2f}%</div>", unsafe_allow_html=True)
+                                with col7:
+                                    st.markdown(f"<div style='padding-top: 0.6rem; font-size: 0.8rem; color: var(--muted);'>{estado_txt}</div>", unsafe_allow_html=True)
+                                with col8:
+                                    if st.button("🗑️", key=f"del_{fname}"):
+                                        st.session_state.deleted_batch_items.add(fname)
+                                        st.rerun()
+
+                                # Guardamos toda la configuración elegida por el usuario
+                                to_save_data.append({
+                                    "Guardar": guardar,
+                                    "Nombre": edited_name,
+                                    "Cantidad": edited_qty,
+                                    "Categoría": edited_cat,
+                                    "Archivo": fname,
+                                    "_code": r["generated_code"],
+                                    "_tech_category": r["predicted_category"],
+                                    "_confidence": r["confidence"]
+                                })
+
+                            export_col, save_col = st.columns(2)
+
+                            with export_col:
+                                _batch_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                st.download_button(
+                                    "⬇ Exportar Excel",
+                                    data=_build_batch_xlsx(visible_raw_results), 
+                                    file_name=f"clasificacion_masiva_{_batch_ts}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key="btn_export_xlsx",
+                                    use_container_width=True,
                                 )
-                            else:
-                                progress = st.progress(0)
-                                saved = 0
-                                failed = 0
-                                total = len(to_save)
 
-                                for i, result in enumerate(to_save):
-                                    payload = {
-                                        "code": result["generated_code"],
-                                        "name": Path(result["filename"]).stem,
-                                        "category": result["predicted_category"],
-                                        "quantity": 1,
-                                        "image_path": result["filename"],
-                                        "confidence": result["confidence"],
-                                        "audit_details": "Registro desde cargue masivo.",
-                                    }
-                                    result_response = register_product(
-                                        payload,
-                                        show_errors=False,
-                                    )
-                                    if result_response:
-                                        saved += 1
-                                    else:
-                                        failed += 1
+                            with save_col:
+                                save_clicked = st.button(
+                                    "Guardar seleccionados",
+                                    key="btn_batch_save",
+                                    type="primary",
+                                    use_container_width=True,
+                                )
 
-                                    progress.progress((i + 1) / total)
+                            if save_clicked:
+                                # Solo procesamos las filas que dejaron con el 'check' de Guardar activado
+                                to_save_filtered = [row for row in to_save_data if row["Guardar"]]
+                                
+                                if not to_save_filtered:
+                                    st.warning("No seleccionaste ninguna imagen para guardar (casillas desmarcadas).")
+                                else:
+                                    progress = st.progress(0)
+                                    saved = 0
+                                    failed = 0
+                                    total = len(to_save_filtered)
+                                    category_reverse_map = {v: k for k, v in CATEGORY_LABELS.items()}
 
-                                summary = f"Guardados: {saved}"
-                                if skipped_conf > 0:
-                                    summary += f" | Omitidos por baja confianza: {skipped_conf}"
-                                st.success(summary)
-                                if failed > 0:
-                                    st.warning(
-                                        f"{failed} producto(s) no se pudieron guardar "
-                                        "(puede que el codigo ya exista en la BD)."
-                                    )
+                                    # --- VALIDACIÓN DE NOMBRES DUPLICADOS ---
+                                    current_inventory = get_products()
+                                    existing_names = [str(p.get("name", "")).strip().lower() for p in current_inventory]
+                                    
+                                    has_duplicates = False
+                                    for row in to_save_filtered:
+                                        if str(row["Nombre"]).strip().lower() in existing_names:
+                                            has_duplicates = True
+                                            st.error(f"⚠️ El producto '{row['Nombre']}' ya existe en el inventario. Cambia su nombre antes de guardar.")
+                                    
+                                    if not has_duplicates:
+                                        for i, row in enumerate(to_save_filtered):
+                                            tech_category = category_reverse_map.get(row["Categoría"], row["_tech_category"])
+                                            payload = {
+                                                "code": row["_code"],
+                                                "name": str(row["Nombre"]).strip(),
+                                                "category": tech_category,
+                                                "quantity": int(row["Cantidad"]),
+                                                "image_path": str(row["Archivo"]),
+                                                "confidence": float(row["_confidence"]),
+                                                "audit_details": "Registro desde cargue masivo (editado en lista personalizada).",
+                                            }
+                                            result_response = register_product(payload, show_errors=False)
+                                            if result_response:
+                                                saved += 1
+                                            else:
+                                                failed += 1
+                                            progress.progress((i + 1) / total)
+
+                                        summary = f"Guardados: {saved}"
+                                        st.success(summary)
+                                        if failed > 0:
+                                            st.warning(f"{failed} producto(s) no se pudieron guardar (código duplicado en BD).")
 
                     if error_results:
                         with st.expander(f"Imagenes con error ({len(error_results)})"):
